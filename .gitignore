@@ -5,3 +5,7 @@
 _bk/
 
 docs/
+
+# Python キャッシュ
+__pycache__/
+*.pyc

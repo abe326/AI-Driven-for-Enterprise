@@ -23,6 +23,12 @@ import sys
 from pathlib import Path
 import lxml.etree as etree
 
+from pptx import Presentation
+from pptx.util import Pt, Inches
+from pptx.dml.color import RGBColor
+from pptx.enum.text import PP_ALIGN
+from pptx.oxml.ns import qn
+
 # ============================================================
 # カラーパレット（marp-theme.css :root 変数に準拠）
 # ============================================================
@@ -67,14 +73,13 @@ TITLE_BAR_H_IN = 0.9
 
 def _qn(tag: str) -> str:
     """短縮タグ名 → 完全修飾名。例: 'a:latin' → '{http://...}latin'"""
-    from pptx.oxml.ns import qn
     return qn(tag)
 
 
 # OOXML CT_ShapeProperties 子要素の厳密な順序（ECMA-376 準拠）
 # PowerPoint は schema 違反の spPr を silently drop するため、
 # SubElement（末尾追加）ではなく必ずこの順序で insert すること。
-_SPPR_ORDER = [
+_SPPR_ORDER = {tag: i for i, tag in enumerate([
     "a:xfrm",
     "a:custGeom", "a:prstGeom",
     "a:noFill", "a:solidFill", "a:gradFill", "a:blipFill", "a:pattFill", "a:grpFill",
@@ -83,7 +88,7 @@ _SPPR_ORDER = [
     "a:scene3d",
     "a:sp3d",
     "a:extLst",
-]
+])}
 
 
 def _insert_spPr_child(spPr, element):
@@ -93,17 +98,15 @@ def _insert_spPr_child(spPr, element):
     順序が不明な要素は末尾に append する。
     """
     tag_local = etree.QName(element.tag).localname
-    prefix_tag = f"a:{tag_local}"
-    try:
-        my_order = _SPPR_ORDER.index(prefix_tag)
-    except ValueError:
+    my_order = _SPPR_ORDER.get(f"a:{tag_local}")
+    if my_order is None:
         spPr.append(element)
         return
     # 自分より後ろに来るべき最初の兄弟の直前に insert
     for i, child in enumerate(spPr):
         child_local = etree.QName(child.tag).localname
-        child_prefix = f"a:{child_local}"
-        if child_prefix in _SPPR_ORDER and _SPPR_ORDER.index(child_prefix) > my_order:
+        child_order = _SPPR_ORDER.get(f"a:{child_local}")
+        if child_order is not None and child_order > my_order:
             spPr.insert(i, element)
             return
     spPr.append(element)
@@ -111,7 +114,6 @@ def _insert_spPr_child(spPr, element):
 
 def _rgb(hex_str: str):
     """'2563eb' → RGBColor(0x25, 0x63, 0xeb)"""
-    from pptx.dml.color import RGBColor
     h = hex_str.lstrip("#")
     return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
@@ -153,8 +155,6 @@ def _set_font_cjk(run, name: str, size_pt: float, bold: bool, color_hex: str):
     フォント名を設定することで日本語文字にも確実に適用される。
     （Issue #768 の回避策）
     """
-    from pptx.util import Pt
-
     run.font.size  = Pt(size_pt)
     run.font.bold  = bold
     run.font.color.rgb = _rgb(color_hex)   # 必ず明示（省略で不可視バグ発生）
@@ -173,7 +173,6 @@ def _set_font_cjk(run, name: str, size_pt: float, bold: bool, color_hex: str):
 
 def _set_para_align(p, h_align: str = "left"):
     """水平揃えをパラグラフレベルで設定する。"""
-    from pptx.enum.text import PP_ALIGN
     mapping = {
         "left":   PP_ALIGN.LEFT,
         "center": PP_ALIGN.CENTER,
@@ -218,7 +217,6 @@ def _set_rounded_corners(shape, adj: int = 8000):
 
 def _set_body_inset(tf, left_in=0.1, top_in=0.05, right_in=0.1, bottom_in=0.05):
     """テキストフレームの内側余白を設定する（EMU換算）。"""
-    from pptx.util import Inches
     bodyPr = tf._txBody.find(_qn("a:bodyPr"))
     if bodyPr is not None:
         emu = lambda v: str(int(Inches(v)))
@@ -248,15 +246,25 @@ def _add_run(p, text: str, size_pt: float, bold: bool,
 # Markdown クリーナ
 # ============================================================
 
+# clean_md で順次適用する (compiled-pattern, replacement) のリスト
+_MD_CLEAN_RULES = [
+    (re.compile(r"`([^`]+)`"),               r"\1"),  # コードスパン
+    (re.compile(r"\*\*(.+?)\*\*"),           r"\1"),  # 太字 **
+    (re.compile(r"__(.+?)__"),               r"\1"),  # 太字 __
+    (re.compile(r"\*(.+?)\*"),               r"\1"),  # 斜体 *
+    (re.compile(r"_(.+?)_"),                 r"\1"),  # 斜体 _
+    (re.compile(r"\[([^\]]+)\]\([^)]+\)"),   r"\1"),  # リンク
+    (re.compile(r"<[^>]+>"),                 ""),     # HTML タグ
+]
+
+# コードブロック ```...``` の本体を抽出
+_RE_CODE_BLOCK = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
+
+
 def clean_md(text: str) -> str:
     """Markdown 記法をプレーンテキストに変換する。"""
-    text = re.sub(r"`([^`]+)`", r"\1", text)          # コードスパン
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)      # 太字 **
-    text = re.sub(r"__(.+?)__", r"\1", text)           # 太字 __
-    text = re.sub(r"\*(.+?)\*", r"\1", text)           # 斜体 *
-    text = re.sub(r"_(.+?)_", r"\1", text)             # 斜体 _
-    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)  # リンク
-    text = re.sub(r"<[^>]+>", "", text)                # HTML タグ
+    for pattern, repl in _MD_CLEAN_RULES:
+        text = pattern.sub(repl, text)
     return text.strip()
 
 
@@ -305,7 +313,7 @@ def _extract_divs(block: str):
 
 def _extract_code_blocks(text: str) -> list[str]:
     """コードブロック（```...```）の内容を抽出する。"""
-    return re.findall(r"```[^\n]*\n(.*?)```", text, re.DOTALL)
+    return _RE_CODE_BLOCK.findall(text)
 
 
 def _extract_h3_sections(block: str) -> list[dict]:
@@ -323,7 +331,7 @@ def _extract_h3_sections(block: str) -> list[dict]:
         content = parts[i + 1]
 
         bullets = re.findall(r"^[-*]\s+(.+)", content, re.MULTILINE)
-        code_m = re.search(r"```[^\n]*\n(.*?)```", content, re.DOTALL)
+        code_m = _RE_CODE_BLOCK.search(content)
         code = code_m.group(1).strip() if code_m else ""
 
         sections.append({"heading": heading, "bullets": bullets, "code": code})
@@ -419,12 +427,10 @@ def _parse_slide_block(block: str) -> dict:
 
 def _in(v):
     """float インチ → Emu"""
-    from pptx.util import Inches
     return Inches(v)
 
 
 def _pt(v):
-    from pptx.util import Pt
     return Pt(v)
 
 
@@ -476,7 +482,6 @@ def _add_gradient_rect(slide, x, y, w, h, hex1: str, hex2: str,
 def _add_rect(slide, x, y, w, h, fill_hex: str, border_hex: str = None,
               border_pt: float = 0):
     """背景用矩形を追加する（テキストなし）。"""
-    from pptx.util import Pt
     shape = slide.shapes.add_shape(1, x, y, w, h)
     _clear_shape_effects(shape)          # シャドウ除去
     shape.fill.solid()
@@ -499,8 +504,6 @@ def _add_text_shape(slide, x, y, w, h,
     テキスト付き図形を追加する。
     フォント・色は必ず明示的に設定する（テーマ依存を排除）。
     """
-    from pptx.util import Pt
-
     shape = slide.shapes.add_shape(1, x, y, w, h)
     _clear_shape_effects(shape)          # シャドウ除去
 
@@ -571,7 +574,6 @@ def _add_title_bar(slide, title: str):
     _add_rect(slide, _in(0), _in(0), W, H, fill_hex=COLOR_BG_SUB)
 
     # 下ボーダーライン（primary 色の細矩形）
-    from pptx.util import Pt as _Pt
     border_h = _in(BORDER_PT / 72)  # pt → inch → EMU
     _add_rect(slide, _in(0), H - border_h, W, border_h, fill_hex=COLOR_PRIMARY)
 
@@ -848,7 +850,6 @@ def _render_kpi(slide, data: dict):
         card.fill.solid()
         card.fill.fore_color.rgb = _rgb(COLOR_BG_SUB)
         card.line.color.rgb = _rgb(COLOR_BORDER)
-        from pptx.util import Pt
         card.line.width = Pt(0.75)
         _set_rounded_corners(card, adj=5000)  # border-radius: 12px相当
 
@@ -942,8 +943,6 @@ def _render_two_column(slide, data: dict, layout_name: str):
 def _render_column_card(slide, content: str, x_in, top_in, w_in, h_in,
                         bg: str = COLOR_BG_SUB, rounded: bool = False):
     """カラムカードを描画する。"""
-    from pptx.util import Pt
-
     # カード背景（角丸オプション付き）
     card = slide.shapes.add_shape(
         1, _in(x_in), _in(top_in), _in(w_in), _in(h_in)
@@ -1011,9 +1010,8 @@ def _render_flow(slide, data: dict):
         _clear_shape_effects(box)
         box.fill.solid()
         box.fill.fore_color.rgb = _rgb(COLOR_BG_SUB)
-        from pptx.util import Pt as _Pt2
         box.line.color.rgb = _rgb(COLOR_BORDER)
-        box.line.width = _Pt2(0.75)
+        box.line.width = Pt(0.75)
         _set_rounded_corners(box, adj=4000)  # border-radius: 8px
 
         text_lines = [clean_md(l.strip("- ").strip())
@@ -1051,8 +1049,6 @@ def _render_flow(slide, data: dict):
 
 def _render_table_shapes(slide, data: dict, top_in: float):
     """テーブルを PPTX table で描画する。"""
-    from pptx.util import Pt
-
     header = data["table_header"]
     rows_data = data["table"]
 
@@ -1114,12 +1110,6 @@ def _render_default(slide, data: dict):
 
 def build_pptx(slides: list[dict], output_path: str):
     """スライドリストから PPTX を生成する。"""
-    try:
-        from pptx import Presentation
-    except ImportError:
-        print("[ERROR] python-pptx が未インストールです。pip install python-pptx", file=sys.stderr)
-        sys.exit(1)
-
     prs = Presentation()
     prs.slide_width  = _in(SLIDE_W_IN)
     prs.slide_height = _in(SLIDE_H_IN)

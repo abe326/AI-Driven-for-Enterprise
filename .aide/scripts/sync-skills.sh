@@ -1,45 +1,60 @@
 #!/usr/bin/env bash
 #
 # sync-skills.sh
-# .aide/skills/ の正本から各AIツール用のラッパーを一括生成する
+# .aide/ の正本から各AIツール用のラッパーを一括生成する（bash版）
+#
+# 出力先（2系統に集約）:
+#   .claude/skills/   … Claude Code 用スキルラッパー
+#   .claude/agents/   … Claude Code 用レビューエージェント
+#   .agents/skills/   … GitHub Copilot + Codex 用スキルラッパー
+#
+# 正本（編集しない・不可侵のフレームワーク核）:
+#   .aide/skills/   コアスキル
+#   .aide/agents/   レビューエージェント
+#
+# カスタマイズは .aide/ の外で行う（.aide/ は一切編集しない）:
+#   - 独自スキル        … .claude/skills/ ・ .agents/skills/ に直接作成（sync 対象外＝消さない・上書きしない）
+#   - プロジェクトルール … CLAUDE.md / AGENTS.md に直接記述
+#   - 成果物テンプレート … .aide-templates/（プロジェクト直下）に上書きを置く（スキルが実行時に優先読込）
 #
 # 使い方:
 #   bash .aide/scripts/sync-skills.sh          # 全ツール向けに生成
 #   bash .aide/scripts/sync-skills.sh claude    # Claude Code用のみ
-#   bash .aide/scripts/sync-skills.sh copilot   # GitHub Copilot用のみ
-#   bash .aide/scripts/sync-skills.sh codex     # Codex CLI用のみ
+#   bash .aide/scripts/sync-skills.sh agents    # Copilot + Codex（.agents/）のみ
 #
-# スキル追加時:
-#   1. .aide/skills/<skill-name>/SKILL.md を作成
-#   2. このスクリプトを実行
-#
+# 注意: 成果物カタログ/雛形（.aide/templates/, .aide-templates/）はスキルが
+#       実行時に直接読むため sync の対象外（編集すれば即反映される）。
 
 set -euo pipefail
 
-# プロジェクトルートを検出（.aide/ の親）
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AIDE_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$AIDE_DIR")"
 
 SKILLS_SRC="$AIDE_DIR/skills"
+AGENTS_SRC="$AIDE_DIR/agents"
 TARGET="${1:-all}"
 
-# 色付き出力（非対応ターミナルでは無視）
 green() { printf '\033[32m%s\033[0m\n' "$1"; }
 yellow() { printf '\033[33m%s\033[0m\n' "$1"; }
 dim() { printf '\033[2m%s\033[0m\n' "$1"; }
 
-# SKILL.md からフロントマターを抽出
+# SKILL.md からフロントマターの1フィールドを抽出
 extract_field() {
     local file="$1" field="$2"
-    sed -n '/^---$/,/^---$/p' "$file" | grep "^${field}:" | sed "s/^${field}: *//"
+    awk -v f="$field" '
+        /^---$/ { c++; if (c == 2) exit; next }
+        c == 1 && index($0, f ":") == 1 {
+            sub("^" f ": *", "")
+            print
+            exit
+        }
+    ' "$file"
 }
 
-# ラッパー用の description を決定
-# short_description があればそれを、無ければ description を使う
+# ラッパー用 description（short_description 優先、無ければ description）
 resolve_wrapper_description() {
-    local file="$1"
-    local short_desc description
+    local file="$1" short_desc description
     short_desc=$(extract_field "$file" "short_description")
     if [ -n "$short_desc" ]; then
         printf '%s' "$short_desc"
@@ -49,28 +64,37 @@ resolve_wrapper_description() {
     fi
 }
 
-# スキル一覧を取得
-get_skills() {
-    find "$SKILLS_SRC" -mindepth 1 -maxdepth 1 -type d | sort | while read -r dir; do
-        if [ -f "$dir/SKILL.md" ]; then
-            basename "$dir"
-        fi
+# ─── スキルのプリフェッチ（コア正本のみ） ──────────────────
+declare -a ALL_SKILLS
+declare -A SKILL_NAME SKILL_WRAPPER_DESC
+
+list_skill_dirs() {
+    local base="$1"
+    [ -d "$base" ] || return 0
+    find "$base" -mindepth 1 -maxdepth 1 -type d | sort | while read -r dir; do
+        [ -f "$dir/SKILL.md" ] && basename "$dir"
     done
 }
 
-# ─── Claude Code用ラッパー生成 ─────────────────────────────
-generate_claude() {
+prefetch_skills() {
+    local skill file name desc
+    for skill in $(list_skill_dirs "$SKILLS_SRC"); do
+        file="$SKILLS_SRC/$skill/SKILL.md"
+        name=$(extract_field "$file" "name")
+        desc=$(resolve_wrapper_description "$file")
+        ALL_SKILLS+=("$skill")
+        SKILL_NAME[$skill]="${name:-$skill}"
+        SKILL_WRAPPER_DESC[$skill]="$desc"
+    done
+}
+
+# ─── Claude Code 用スキルラッパー ─────────────────────────
+generate_claude_skills() {
     local dest="$PROJECT_ROOT/.claude/skills"
     mkdir -p "$dest"
-
-    local count=0
-    while IFS= read -r skill; do
-        local name description
-        name=$(extract_field "$SKILLS_SRC/$skill/SKILL.md" "name")
-        description=$(resolve_wrapper_description "$SKILLS_SRC/$skill/SKILL.md")
-        [ -z "$name" ] && name="$skill"
-        [ -z "$description" ] && description=""
-
+    local skill name description
+    for skill in "${ALL_SKILLS[@]}"; do
+        name="${SKILL_NAME[$skill]}"; description="${SKILL_WRAPPER_DESC[$skill]}"
         mkdir -p "$dest/$skill"
         cat > "$dest/$skill/SKILL.md" <<WRAPPER
 ---
@@ -80,69 +104,17 @@ description: ${description}
 
 @../../.aide/skills/${skill}/SKILL.md
 WRAPPER
-        count=$((count + 1))
-    done < <(get_skills)
-
-    green "  Claude Code: ${count} スキルラッパーを生成 → .claude/skills/"
+    done
+    green "  Claude Code: ${#ALL_SKILLS[@]} スキルラッパー → .claude/skills/"
 }
 
-# ─── GitHub Copilot用ラッパー生成 ──────────────────────────
-generate_copilot() {
-    local skills_dest="$PROJECT_ROOT/.github/skills"
-    local prompts_dest="$PROJECT_ROOT/.github/prompts"
-    mkdir -p "$skills_dest" "$prompts_dest"
-
-    local count=0
-    while IFS= read -r skill; do
-        local name description
-        name=$(extract_field "$SKILLS_SRC/$skill/SKILL.md" "name")
-        description=$(resolve_wrapper_description "$SKILLS_SRC/$skill/SKILL.md")
-        [ -z "$name" ] && name="$skill"
-        [ -z "$description" ] && description=""
-
-        # .github/skills/ （エージェントスキル）
-        mkdir -p "$skills_dest/$skill"
-        cat > "$skills_dest/$skill/SKILL.md" <<WRAPPER
----
-name: ${name}
-description: ${description}
----
-
-以下のスキル定義に従って実行してください：
-
-[${name} スキル定義](../../.aide/skills/${skill}/SKILL.md)
-WRAPPER
-
-        # .github/prompts/ （スラッシュコマンド）
-        cat > "$prompts_dest/${skill}.prompt.md" <<WRAPPER
----
-description: "${description}"
-agent: agent
----
-
-以下のスキル定義に従って実行してください：
-
-[${name} スキル定義](../.aide/skills/${skill}/SKILL.md)
-WRAPPER
-        count=$((count + 1))
-    done < <(get_skills)
-
-    green "  Copilot:     ${count} スキルラッパーを生成 → .github/skills/, .github/prompts/"
-}
-
-# ─── Codex CLI用ラッパー生成 ───────────────────────────────
-generate_codex() {
+# ─── Copilot + Codex 用スキルラッパー（.agents/） ─────────
+generate_agents_skills() {
     local dest="$PROJECT_ROOT/.agents/skills"
     mkdir -p "$dest"
-
-    local count=0
-    while IFS= read -r skill; do
-        local name description
-        name=$(extract_field "$SKILLS_SRC/$skill/SKILL.md" "name")
-        description=$(resolve_wrapper_description "$SKILLS_SRC/$skill/SKILL.md")
-        [ -z "$name" ] && name="$skill"
-        [ -z "$description" ] && description=""
-
+    local skill name description
+    for skill in "${ALL_SKILLS[@]}"; do
+        name="${SKILL_NAME[$skill]}"; description="${SKILL_WRAPPER_DESC[$skill]}"
         mkdir -p "$dest/$skill"
         cat > "$dest/$skill/SKILL.md" <<WRAPPER
 ---
@@ -153,73 +125,82 @@ description: ${description}
 以下のスキル定義に従って実行してください。
 正本: ../../.aide/skills/${skill}/SKILL.md
 WRAPPER
-        count=$((count + 1))
-    done < <(get_skills)
-
-    green "  Codex CLI:   ${count} スキルラッパーを生成 → .agents/skills/"
+    done
+    green "  Copilot+Codex: ${#ALL_SKILLS[@]} スキルラッパー → .agents/skills/"
 }
 
-# ─── 不要ラッパーの検出 ────────────────────────────────────
-check_orphans() {
-    local found=0
+# ─── Claude Code 用レビューエージェント（全文コピー） ──────
+# エージェント定義は @import ではなく実体が必要なため全文を配置する
+generate_claude_agents() {
+    local dest="$PROJECT_ROOT/.claude/agents"
+    mkdir -p "$dest"
+    local f count=0
+    if [ -d "$AGENTS_SRC" ]; then
+        for f in "$AGENTS_SRC"/*.md; do
+            [ -f "$f" ] || continue
+            cp "$f" "$dest/$(basename "$f")"
+            count=$((count + 1))
+        done
+    fi
+    green "  Claude Code: ${count} レビューエージェント → .claude/agents/"
+}
 
-    for dir in "$PROJECT_ROOT/.claude/skills" "$PROJECT_ROOT/.github/skills" "$PROJECT_ROOT/.agents/skills"; do
+# ─── aide 管理外スキルの情報表示 ───────────────────────────
+# .claude/skills, .agents/skills 配下でコア正本に無いものは「ユーザー独自スキル」。
+# sync は触らない（消さない・上書きしない）。エラーではなく情報として表示する。
+report_user_skills() {
+    local found=0 dir wrapper_dir skill_name
+    for dir in "$PROJECT_ROOT/.claude/skills" "$PROJECT_ROOT/.agents/skills"; do
         [ -d "$dir" ] || continue
-        find "$dir" -mindepth 1 -maxdepth 1 -type d | while read -r wrapper_dir; do
-            local skill_name
+        while IFS= read -r wrapper_dir; do
             skill_name=$(basename "$wrapper_dir")
             if [ ! -d "$SKILLS_SRC/$skill_name" ]; then
-                yellow "  孤立ラッパー検出: $wrapper_dir （正本が存在しない）"
-                found=1
+                dim "  ユーザー独自スキル（aide管理外・保持）: $wrapper_dir"; found=1
             fi
-        done
+        done < <(find "$dir" -mindepth 1 -maxdepth 1 -type d)
     done
-
-    for prompt_file in "$PROJECT_ROOT/.github/prompts"/aide-*.prompt.md; do
-        [ -f "$prompt_file" ] || continue
-        local skill_name
-        skill_name=$(basename "$prompt_file" .prompt.md)
-        if [ ! -d "$SKILLS_SRC/$skill_name" ]; then
-            yellow "  孤立プロンプト検出: $prompt_file （正本が存在しない）"
-            found=1
-        fi
-    done
-
-    if [ "$found" -eq 0 ]; then
-        dim "  孤立ラッパーなし"
+    if [ -d "$PROJECT_ROOT/.claude/agents" ]; then
+        local agent_file agent_name
+        while IFS= read -r agent_file; do
+            agent_name=$(basename "$agent_file")
+            if [ ! -f "$AGENTS_SRC/$agent_name" ]; then
+                dim "  ユーザー独自エージェント（aide管理外・保持）: $agent_file"; found=1
+            fi
+        done < <(find "$PROJECT_ROOT/.claude/agents" -mindepth 1 -maxdepth 1 -type f -name '*.md')
     fi
+    [ "$found" -eq 0 ] && dim "  なし"
 }
 
 # ─── メイン ────────────────────────────────────────────────
+prefetch_skills
+
 echo ""
-echo "aide sync-skills"
-echo "================"
-echo "正本: .aide/skills/ ($(get_skills | wc -l) スキル)"
+echo "aide sync-skills (bash)"
+echo "======================="
+echo "正本: .aide/skills/ = ${#ALL_SKILLS[@]} スキル / .aide/agents/"
 echo ""
 
 case "$TARGET" in
     claude)
-        generate_claude
+        generate_claude_skills
+        generate_claude_agents
         ;;
-    copilot)
-        generate_copilot
-        ;;
-    codex)
-        generate_codex
+    agents)
+        generate_agents_skills
         ;;
     all)
-        generate_claude
-        generate_copilot
-        generate_codex
+        generate_claude_skills
+        generate_claude_agents
+        generate_agents_skills
         ;;
     *)
-        echo "使い方: $0 [all|claude|copilot|codex]"
+        echo "使い方: $0 [all|claude|agents]"
         exit 1
         ;;
 esac
 
 echo ""
-echo "孤立チェック:"
-check_orphans
+echo "aide管理外（ユーザー独自・保持対象）:"
+report_user_skills
 echo ""
 green "完了"

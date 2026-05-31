@@ -1,206 +1,126 @@
 ---
 name: aide-init
-description: プロジェクトを初期化する。dev（新規開発）/ ops（運用保守）/ dev+ops の3モードに対応。フォルダ構造・CLAUDE.md・GitHub Copilot/Codex向け設定ファイルを一括生成する。「プロジェクトを始める」「新規リポジトリにaideを入れたい」「初期設定をしたい」と言われたら必ずこのスキルを使う。要件定義や設計の前に実行するセットアップスキル。
-short_description: プロジェクトを dev / ops / dev+ops で初期化する。フォルダ構成・CLAUDE.md・必要ツールを一括セットアップ
+description: プロジェクトを初期化する。pm（PM業務）/ product（製品運用）/ dev（新規開発）/ ops（既存運用）の4セグメントから選び、作業フォルダの確認・選択式オンデマンドフォルダ生成・プロファイル生成・CLAUDE.md/AGENTS.md 生成を行う。「プロジェクトを始める」「aideを入れたい」「初期設定をしたい」「伴走してほしい」と言われたら必ずこのスキルを使う。作業の前に実行するセットアップスキル。
+short_description: プロジェクトをセグメント別に初期化する。作業フォルダ確認・選択式フォルダ生成・プロファイル生成を行う
 ---
 
 # aide-init: プロジェクト初期化
 
-ユーザーに業務タイプを確認し、対応するプロジェクト構成を生成する。
+セグメントを確認し、作業フォルダを確定し、選択されたフェーズだけ浅いフォルダを生成する。深い階層を勝手に作らない（[rules.md](../../rules.md) の「選択式オンデマンドフォルダ生成」に従う）。
 
 ## 手順
 
-### 1. プロジェクト情報の確認
+### 1. セグメントと基本情報の確認
 
-ユーザーに以下を確認する（引数で指定されている場合はスキップ）：
+ユーザーに以下を確認する（引数で指定済みならスキップ）。
 
-- **業務タイプ**（複数選択可）: `dev`（新規開発） / `ops`（運用保守）
-  - 例: `dev+ops` のように組み合わせ可能
-  - 単一選択でもよい
-- **プロジェクト規模**: `quick`（小規模） / `standard`（通常） / `enterprise`（大規模）
-  - quick: プロトタイプ・PoC・内部ツール向け。フェーズを統合し成果物を簡略化
-  - standard: 通常の開発プロジェクト（デフォルト）
-  - enterprise: コンプライアンス要件あり。監査証跡・品質ゲート・トレーサビリティを追加
-  - 省略時は `standard` とする
-- **利用AIツール**: `claude+copilot`（デフォルト） / `codex` / `claude` / `copilot`
-  - 省略時は `claude+copilot` とする
+- **セグメント**（複数選択可）:
+  - `pm` — PM業務（KPI/ゴール設定・プロジェクト管理）
+  - `product` — 製品運用（製品設定・問題解決）
+  - `dev` — 新規開発（ウォーターフォール×SDD）
+  - `ops` — 既存運用（問い合わせ・課題・障害対応）
+  - 例: `pm+dev` のように組み合わせ可
+- **作業フォルダ**: 成果物の出力ルート（既定候補 `docs/`）。**未指定なら必ず確認する**。確認なしに場所を決めない
+- **利用AIツール**: `claude`（デフォルト・Claude Code）/ `agents`（Copilot + Codex）/ 両方
 - **プロジェクト名 / システム名**
-- **技術スタック**（わかる範囲で）
+- **技術スタック**（dev のみ・わかる範囲で）
 
-### 2. フォルダ構成の生成
+### 2. フェーズ／オプションの選択（選択式）
 
-選択された業務タイプに応じて、該当するフォルダをすべて生成する。複数選択時はマージして生成する。
+選択されたセグメントに応じて、フェーズ候補を**選択肢で提示**する。選ばれたものだけフォルダを生成する（全部は作らない）。
 
-フォルダ構成はプロジェクト規模に応じて調整する。以下はdev を含む場合の規模別構成。
+| セグメント | フェーズ候補（選択式） |
+|---|---|
+| `pm` | 憲章（KPI・ゴール） / スケジュール / 課題 / メンバ管理 |
+| `product` | 課題管理 / 設定作業記録 |
+| `dev` | 要件 / 基本設計 / 詳細設計 / 実装計画 / 単体テスト / 結合テスト / システムテスト / 運用テスト |
+| `ops` | 問い合わせ対応 / 課題対応 / 障害対応 / 開発資料・ソース格納 |
 
-#### quick かつ dev を含む場合
+選択された各フェーズについて、続けて **成果物セット**を選択式で提示する。成果物候補は[成果物カタログ](../../templates/deliverables-catalog.md)（`.aide-templates/` に上書きがあればそちらを優先）から読み、「既定」マークの成果物を初期選択にする。利用者は増減できる。
 
-```
-docs-ドキュメント/
-├── 00_pm-管理/
-│   └── issues-課題.md
-├── specs-仕様/
-│   ├── artifacts-成果物/
-│   ├── brainstorms-検討履歴/
-│   │   └── index.md
-│   └── deliverables-成果物一覧.md
-├── testing-テスト/
-│   ├── artifacts-成果物/
-│   └── evidence-証跡/
-src/
-tests/
-```
+> 例（dev で「基本設計」を選択時）: 基本設計書【既定】 / 画面一覧 / ER図 / API一覧 → 必要なものにチェック
 
-quickモードでは要件・設計・計画フェーズを `specs-仕様/` に統合する。meeting-notes、reviews、slides フォルダは省略する。
+加えて、横断オプションを提示する（任意）:
+- **トレーサビリティ** — 成果物間の対応を `traceability-matrix.md` で管理
+- **監査** — 監査証跡・コンプライアンス台帳・品質ゲート
 
-#### standard かつ dev を含む場合
+> 「あとから追加もできます。まず必要なフェーズ・成果物だけ選んでください」と案内する。作業中に追加が必要になれば、その都度このスキル（または各スキル）が選択肢を出して追加生成する。
 
-```
-docs-ドキュメント/
-├── 00_pm-管理/
-│   ├── issues-課題.md
-│   ├── schedule-スケジュール.md
-│   ├── estimate-見積もり.md
-│   └── slides-資料/
-│       └── export/
-├── 01_requirements-要件/
-│   ├── artifacts-成果物/
-│   ├── brainstorms-検討履歴/
-│   │   └── index.md
-│   ├── meeting-notes-打合せ/
-│   ├── reviews-レビュー/
-│   └── slides-資料/
-│       └── export/
-├── 02_design-設計/
-│   ├── artifacts-成果物/
-│   ├── brainstorms-検討履歴/
-│   │   └── index.md
-│   ├── meeting-notes-打合せ/
-│   ├── reviews-レビュー/
-│   └── slides-資料/
-│       └── export/
-├── 03_plans-製造計画/
-│   ├── artifacts-成果物/
-│   ├── brainstorms-検討履歴/
-│   │   └── index.md
-│   ├── meeting-notes-打合せ/
-│   ├── reviews-レビュー/
-│   └── slides-資料/
-│       └── export/
-├── 04_testing-テスト/
-│   ├── artifacts-成果物/
-│   ├── evidence-証跡/
-│   │   ├── unit-単体/
-│   │   ├── integration-結合/
-│   │   └── quality-品質/
-│   ├── brainstorms-検討履歴/
-│   │   └── index.md
-│   └── reviews-レビュー/
-src/
-tests/
-```
+### 2-2. 成果物の標準メニューのカスタマイズ（確認式・任意）
 
-#### enterprise かつ dev を含む場合
+成果物の**候補・既定・章立て自体**をこのプロジェクト／会社用に変えたいかを確認する。利用者に内部仕様を意識させない。
 
-standard のフォルダ構成に加え、以下の監査フォルダを追加する：
+> このプロジェクト（または会社）用に、成果物の標準メニューや章立てを調整しますか？
+> （しない場合は標準のまま進みます。あとからでも変更できます）
 
-```
-docs-ドキュメント/
-├── ... （standardと同じ 00_pm〜04_testing）
-└── 05_audit-監査/
-    ├── audit-trail-監査証跡/
-    ├── compliance-台帳/
-    │   └── compliance-register.md
-    ├── quality-metrics-品質メトリクス/
-    │   └── metrics-history.md
-    ├── traceability-トレーサビリティ/
-    │   └── traceability-matrix.md
-    └── reports-レポート/
-```
+**「調整する」と答えた場合のみ**、init が **`.aide-templates/`（プロジェクト直下・`.aide/` の外）** に上書きを生成・更新する。**`.aide/` は一切編集しない。**
 
-enterpriseの場合、compliance-register.md と traceability-matrix.md は `.aide/templates/` 配下のテンプレートから生成する。
+1. `.aide/templates/deliverables-catalog.md`（正本）を下敷きに `.aide-templates/deliverables-catalog.md` を作成する（既にあれば再利用）
+2. 会話で受けた調整を、この `.aide-templates/` 側のカタログへ反映する:
+   - 成果物の**追加／除外／改名**、**既定（初期選択）の変更**
+   - 章立てを変える成果物があれば、`.aide/templates/deliverables/<name>.md` を下敷きに `.aide-templates/deliverables/<name>.md` を作成し、会話内容を反映する
+3. **正本（`.aide/templates/`）は編集しない**。上書きは常に `.aide-templates/` 側に置く
+4. スキルは実行時に `.aide-templates/` を優先して読むため、変更は即反映される（`sync` 再実行は不要）
 
-#### ops を含む場合
+「会社共通の標準にしたい」と言われた場合は、`.aide-templates/` を会社の配布物に含めれば全プロジェクトに効く旨を案内する。
 
-```
-docs-ドキュメント/
-├── 00_pm-管理/
-│   └── tasks-タスク.md
-└── tasks-タスク/
-src/
-tests/
-```
+### 3. 作業フォルダと選択フォルダの生成
 
-#### 複数選択時のマージ例
+確定した作業フォルダ配下に、以下を**浅い1段**で生成する。フォルダ内の構成は利用者に委ね、深いサブツリーは作らない。
 
-`dev+ops` の場合、dev のフォルダ構成に ops の `tasks-タスク/` を追加する。
+- **管理領域**: `<作業フォルダ>/00_pm-管理/`
+  - `issues-課題.md`（dev / ops / product / pm で課題を扱う場合）
+  - `tasks-タスク.md`（ops）
+- **選択されたフェーズフォルダ**: 各フェーズにつき1段のフォルダ + `index.md`（履歴・成果物の見出しを兼ねる軽量インデックス）
+  - 例（dev で「要件・基本設計」を選択時）: `<作業フォルダ>/01_要件/index.md`、`<作業フォルダ>/02_基本設計/index.md`
+  - ops は対応カテゴリごと: `<作業フォルダ>/問い合わせ-inquiry/`、`課題-issue/`、`障害-incident/`、`資料-assets/`
+- **オプション選択時のみ**:
+  - トレーサビリティ → `<作業フォルダ>/00_pm-管理/traceability-matrix.md`
+  - 監査 → `<作業フォルダ>/00_pm-管理/audit/`（証跡）, `compliance-register.md`
 
-### 3. テンプレートファイルの生成
-
-各フォルダ内に初期テンプレートを配置する：
-
-- **issues-課題.md**: 課題管理テンプレート（ステータス定義 + 空の課題一覧テーブル）
-- **schedule-スケジュール.md**: スケジュールテンプレート（マイルストーン + 空のタスク一覧テーブル）
-- **brainstorms/index.md**: ブレストインデックステンプレート（ヘッダー + 空のテーブル）
-- **deliverables-成果物一覧.md**: 成果物一覧テンプレート（フェーズ毎に配置）
-
-deliverables-成果物一覧.md はフェーズ毎に .aide/templates/ から対応するテンプレートをコピーして配置する：
-
-#### standard / enterprise の場合（現行と同じ）
-- docs/01_requirements/ ← .aide/templates/deliverables-requirements.md
-- docs/02_design/ ← .aide/templates/deliverables-design.md
-- docs/03_plans/ ← .aide/templates/deliverables-plans.md
-- docs/04_testing/ ← .aide/templates/deliverables-testing.md
-
-#### quick の場合
-- docs/specs-仕様/ ← .aide/templates/deliverables-quick.md
-
-#### enterprise の場合（上記に加えて）
-- docs/05_audit-監査/ ← .aide/templates/deliverables-audit.md
-- docs/05_audit-監査/compliance-台帳/compliance-register.md ← .aide/templates/compliance-register.md
-- docs/05_audit-監査/traceability-トレーサビリティ/traceability-matrix.md ← .aide/templates/traceability-matrix.md
-- docs/05_audit-監査/quality-metrics-品質メトリクス/metrics-history.md ← 空の初期テンプレート
-
-brainstorms/index.md の初期内容：
+`index.md` の初期内容（軽量・フェーズ共通）:
 
 ```markdown
-# ブレスト検討履歴インデックス
+# <フェーズ名> インデックス
 
-| 日付 | ドメイン | テーマ | 結論サマリ | ファイル |
-|---|---|---|---|---|
+## 成果物
+（このフォルダ内のファイルをここに一覧化していく）
+
+## 検討履歴（brainstorms）
+| 日付 | テーマ | 結論サマリ | ファイル |
+|---|---|---|---|
 ```
 
-成果物ファイル（要件書.md、設計書.md、製造計画書.md 等）は `/aide-pm-brainstorm` 実行時に artifacts-成果物/ 配下に作成されるため、init時には生成しない。artifacts-成果物/ フォルダ自体は空で生成する。
+> フォルダ名には日本語＋英識別子を併記する（例: `01_要件/`、`問い合わせ-inquiry/`）。
 
-### 4. CLAUDE.md の生成（プロジェクトルールのマスター）
+### 4. プロファイルの生成（CLAUDE.md）
 
-プロジェクトルートに CLAUDE.md を生成する。**すべてのプロジェクトルール・規約はこのファイルに集約する（Single Source of Truth）**。
+プロジェクトルートに `CLAUDE.md`（マスター）を生成・更新する。冒頭に `.aide/rules.md` の読み込み行を含め、続けて **「## aideプロファイル」** を記載する。
 
-CLAUDE.md のテンプレートは規模に応じて選択する：
-- quick: `.aide/templates/quick-claude.md`
-- standard: `.aide/templates/newdev-claude.md`（現行のまま）
-- enterprise: `.aide/templates/enterprise-claude.md`
+```markdown
+# CLAUDE.md
 
-「プロジェクト規模」セクションにユーザーが選択した規模を記入する。
+@.aide/rules.md
 
-検討内容/.aide/templates/ 配下の該当テンプレートを元に、ユーザーから得た情報を埋め込む。`[角括弧]` の部分はユーザー入力で置き換え、未確定の部分はプレースホルダのまま残す。
+## aideプロファイル
+- セグメント: <選択値>
+- 作業フォルダ: <確定パス>
+- 有効フェーズ: <選択フェーズをカンマ区切り>
+- 成果物: <選択した成果物をフェーズ順に / 区切りで>
+- オプション: <選択オプション / なし>
+
+## プロジェクト概要
+- プロジェクト名: <名称>
+- 技術スタック: <dev の場合>
+
+<!-- ここから下にプロジェクト固有のルールを記載 -->
+```
 
 CLAUDE.md は利用AIツールに関わらず**常に生成する**。
 
-### 5. 参照ファイルの生成（利用AIツールに応じて選択）
+### 5. AGENTS.md の生成（Copilot + Codex 用・参照のみ）
 
-利用AIツールに応じて、必要な参照ファイルのみ生成する。参照ファイルにはプロジェクトルールを書かず、CLAUDE.md への参照指示のみ記載する。
-
-#### 生成する参照ファイルの判定
-
-| 利用AIツール | CLAUDE.md | AGENTS.md | .github/copilot-instructions.md |
-|---|---|---|---|
-| `claude+copilot`（デフォルト） | 生成（マスター） | 生成しない | 生成（参照のみ） |
-| `claude` | 生成（マスター） | 生成しない | 生成しない |
-| `copilot` | 生成（マスター） | 生成しない | 生成（参照のみ） |
-| `codex` | 生成（マスター） | 生成（参照のみ） | 生成しない |
-
-#### AGENTS.md（参照ファイル）の内容
+利用AIツールに `agents`（Copilot/Codex）が含まれる場合のみ、ルートに `AGENTS.md` を生成する。**ルールファイルは CLAUDE.md と AGENTS.md の2本のみ**とし、`.github/copilot-instructions.md` は生成しない。
 
 ```markdown
 # AGENTS.md
@@ -209,154 +129,42 @@ CLAUDE.md は利用AIツールに関わらず**常に生成する**。
 
 **セッション開始時に `.aide/rules.md` を必ず読み、その内容に従ってください。**
 
-- `.aide/rules.md`: aide共通ルール（原則・コーディング規約・コマンド一覧）
-- `CLAUDE.md`: プロジェクト固有の設定（概要・フェーズ・技術スタック・制約）
-- `.claude/skills/`: aideスキル定義（Agent Skills形式）
+- `.aide/rules.md`: aide共通ルール
+- `.aide/skills/`: スキル定義の正本 / `.aide/agents/`: レビューエージェント定義の正本
+- `CLAUDE.md`: プロジェクト固有の設定（aideプロファイルを含む）
+- `.agents/skills/`: Copilot + Codex 用スキルラッパー
 
-> **注意: このファイルの上記の内容は編集しないでください。**
-> `.aide/rules.md` の読み込み指示はaideフレームワークの動作に必要です。
-
----
-
-<!-- ここから下にプロジェクト固有のルールを記載してください。 -->
-```
-
-#### .github/copilot-instructions.md（参照ファイル）の内容
-
-```markdown
-# Copilot Instructions
-
-このプロジェクトはaideフレームワークを使用しています。
-
-**セッション開始時に `.aide/rules.md` を必ず読み、その内容に従ってください。**
-
-- `.aide/rules.md`: aide共通ルール（原則・コーディング規約・コマンド一覧）
-- `CLAUDE.md`: プロジェクト固有の設定（概要・フェーズ・技術スタック・制約）
-- `.claude/skills/`: aideスキル定義（Agent Skills形式）
-
-> **注意: このファイルの上記の内容は編集しないでください。**
-> `.aide/rules.md` の読み込み指示はaideフレームワークの動作に必要です。
+> このファイルの上記内容は編集しないでください。
 
 ---
 
-<!-- ここから下にプロジェクト固有のルールを記載してください。 -->
+<!-- ここから下にプロジェクト固有のルールを記載 -->
 ```
 
-### 6. ツール導入状況の確認と自動インストール
+### 6. ツール導入状況の確認（任意・OS対応）
 
-プロジェクト初期化後、Office ファイル読み込みに必要なツールの導入状況を確認する。
+Office ファイル変換に必要なツールの導入状況を確認し、未導入があればインストールするか尋ねる。**OS によりコマンドを読み替える**（[クロスプラットフォーム](../../rules.md#クロスプラットフォーム)）。
 
-#### 確認対象ツール
+| ツール | 確認（POSIX / Windows） | 用途 |
+|---|---|---|
+| pandoc | `pandoc --version` | Word→MD（高精度） |
+| python-pptx | `python3 -c "import pptx"` / `python -c "import pptx"` | PowerPoint→MD |
+| openpyxl | `python3 -c "import openpyxl"` / `python -c ...` | Excel→MD |
+| python-docx | `python3 -c "import docx"` / `python -c ...` | Word→MD（fallback） |
 
-| ツール | 確認コマンド | 用途 | インストールコマンド |
-|---|---|---|---|
-| pandoc | `pandoc --version` | Word(.docx) → MD変換（高精度） | `apt install pandoc` / `brew install pandoc` |
-| python-pptx | `python3 -c "import pptx"` | PowerPoint(.pptx) → MD変換 | `pip install python-pptx` |
-| openpyxl | `python3 -c "import openpyxl"` | Excel(.xlsx) → MD変換 | `pip install openpyxl` |
-| python-docx | `python3 -c "import docx"` | Word(.docx) → MD変換（pandoc未導入時のfallback） | `pip install python-docx` |
+### 7. 完了報告と伴走の開始
 
-#### フロー
+生成したファイル・フォルダ一覧を表示し、伴走モードへ案内する。
 
-1. 各ツールの確認コマンドを実行し、導入状況を一覧表示する：
-   ```
-   📦 ツール導入状況
-   | ツール       | 状態 | 用途                  |
-   |---|---|---|
-   | pandoc       | ✅    | Word → MD変換（高精度）|
-   | python-pptx  | ❌    | PowerPoint → MD変換    |
-   | openpyxl     | ✅    | Excel → MD変換         |
-   | python-docx  | ✅    | Word → MD変換（fallback）|
-   ```
-2. 未導入のツールがある場合、インストールするか確認する
-3. ユーザーが承認したら、該当ツールのインストールコマンドを実行する
-4. 「後でインストールする」を選んだ場合はスキップし、スキル実行時に再度案内される旨を伝える
-
-### 7. VS Code Marpプレビュー設定
-
-スライドmdをVS Codeでリアルタイムプレビューしながら手動修正するための設定を行う。
-
-#### 設定手順
-
-1. ワークスペースルートの `.vscode/settings.json` を確認する
-2. `markdown.marp.themes` と `markdown.marp.enableHtml` が未設定であれば追加する
-3. 既に `.vscode/settings.json` が存在する場合は既存の設定を壊さないようにマージする
-
-#### 追加する設定
-
-```json
-{
-  "markdown.marp.themes": [
-    "./[aideプロジェクトへの相対パス]/.aide/templates/export/marp-theme.css"
-  ],
-  "markdown.marp.enableHtml": true
-}
-```
-
-パスは、VS Codeで開いているフォルダ（ワークスペースルート）からaideプロジェクトの `.aide/templates/export/marp-theme.css` への相対パスで指定する。
-
-#### 案内
-
-設定追加後、以下を案内する：
-
-> VS Codeに **Marp for VS Code** 拡張をインストールすると、スライドmdをリアルタイムプレビューしながら手動修正できます。
-> 設定を反映するには `Ctrl+Shift+P` → `Developer: Reload Window` を実行してください。
-
-### 8. 完了報告と次のステップ案内
-
-生成したファイル一覧を表示した後、以下の流れでユーザーを案内する：
-
-#### 8-1. 既存資料の格納ガイド
-
-ユーザーに「すでにある資料（打合せ議事録、要件メモ、仕様書、提案書など）はありますか？」と確認し、ある場合は格納先を案内する：
-
-| 資料の種類 | 格納先 |
-|---|---|
-| 打合せ議事録・会議メモ | 各フェーズの `meeting-notes-打合せ/` |
-| 要件・要望メモ | `docs-ドキュメント/01_requirements-要件/` |
-| 設計書・アーキテクチャ図 | `docs-ドキュメント/02_design-設計/` |
-| スケジュール・WBS | `docs-ドキュメント/00_pm-管理/` |
-| 提案書・プレゼン資料 | `docs-ドキュメント/00_pm-管理/slides-資料/` |
-| 問い合わせ記録 | `docs-ドキュメント/inquiry-問い合わせ/` |
-| 既存ソースコード | `src/` |
-
-格納後、AIが読み取って整理できることを伝える。
-
-#### 8-2. 次のアクションの案内
-
-資料の有無にかかわらず、利用可能なコマンドを案内する。案内内容はプロジェクト規模に応じて分岐する：
-
-#### quick の場合
-
-> プロジェクトの準備が整いました（小規模モード）。以下のコマンドが利用できます：
->
-> - `/aide-pm-prototype` — ラフ要件からプロトタイプコードを素早く生成
-> - `/aide-pm-analyze` — 対話で要件を深掘り（ファイル更新なし）
-> - `/aide-pm-brainstorm` — 通常のブレスト（必要に応じて）
->
-> 小規模モードでは、まずプロトタイプを作り、動作確認後に仕様を逆生成するフローが利用できます。
-
-#### standard の場合（現行のまま）
-
-> プロジェクトの準備が整いました。以下のコマンドが利用できます：
->
-> - `/aide-pm-analyze` — 対話で要件や設計の理解を深める（ファイル更新なし）
-> - `/aide-pm-brainstorm` — ブレストしながら成果物（要件書・設計書等）を作成・更新する
->
-> 既存資料がある場合は、先に格納してからコマンドを実行すると、資料の内容も踏まえて整理できます。
-> どのフェーズから始めるかは自由です。通常は要件定義から進めます。
-
-#### enterprise の場合
-
-> プロジェクトの準備が整いました（Enterpriseモード）。以下のコマンドが利用できます：
->
-> - `/aide-pm-analyze` — 対話で要件や設計の理解を深める（ファイル更新なし）
-> - `/aide-pm-brainstorm` — ブレストしながら成果物（要件書・設計書等）を作成・更新する
->
-> Enterpriseモードでは、各フェーズ完了時に `/aide-review-audit` で品質ゲートを確認できます。
-> 監査証跡は各スキル実行時に自動記録されます。
+- 既存資料（議事録・要件メモ・仕様書・ソース等）があれば、対応するフォルダへの格納を案内する
+- **`aide-journey` を起動**して伴走タスクを生成し、最初の一歩を提示する（[aide-journey](../aide-journey/SKILL.md)）
+- セグメント別の代表コマンドを1〜3個案内する（多用しない）
 
 ## 注意事項
 
-- 既存ファイルがある場合は上書きせず、ユーザーに確認する
-- 未確定の情報はプレースホルダ `[...]` のまま残す
-- フォルダ名には必ず日本語の補足を括弧で付ける（例: `00_pm-管理/`）
+- **勝手にフォルダを作らない**: 選択されていないフェーズフォルダは生成しない
+- **作業フォルダ外に出力しない**: 確認・確定した作業フォルダ配下にのみ生成する
+- **深い階層を作らない**: 生成はフェーズ区分けの1段 + 軽量 index.md まで
+- 既存ファイルは上書きせず確認する
+- 未確定情報はプレースホルダ `[...]` のまま残す
+- 監査・トレーサビリティは選択式オプションで扱う

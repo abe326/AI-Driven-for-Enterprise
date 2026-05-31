@@ -1,249 +1,194 @@
-# aide — AI Development Environment
+# aide — AI Driven for Enterprise
 
 **[日本語](README.md)** | English
 
-> **A development framework where AI and humans collaborate phase by phase, using specifications as the common language**
+> **Don't hand everything to AI — humans stay in control and harness it. Spec as the shared language, from requirements through operations: an enterprise framework**
 
-A Specification-Driven Development (SDD) based AI co-pilot tool.
-From meetings to release, AI assists through every phase. Supports 3 project scale modes.
+A framework for anyone who works with an IDE/console (PMs, product operators, new-development engineers, existing-system operators) to work alongside AI. It offers a "free mode" that proactively assists even without setup, and a "companion mode" that guides per target segment.
 
 | | |
 |---|---|
-| **Methodology** | Specification-Driven Development (SDD) + Spec-Anchored (bidirectional spec sync) |
-| **Supported AI Tools** | Claude Code / GitHub Copilot / Codex |
-| **Project Scales** | Quick (prototype) / Standard (default) / Enterprise (with audit) |
-| **Target Workflows** | PM tasks / New development / Operations & maintenance |
-| **Target Users** | Engineers & PMs (designed for non-engineers too) |
+| **Methodology** | Spec-Driven Development (SDD) + Spec-Anchored (two-way spec sync) + Harness Engineering (V-model reviews) |
+| **AI tools** | Claude Code / GitHub Copilot / Codex |
+| **Segments** | PM / Product Operations / New Development / Existing Operations (4 segments, single axis) |
+| **Positioning** | Enterprise-oriented (audit & traceability are opt-in options) |
+| **Environments** | WSL2 / macOS / Linux / **Windows 11 · PowerShell (no WSL2 required)** |
 
 ---
 
-## What is aide?
+## What is aide
 
-Don't leave everything to AI. Humans make decisions, with specifications as the source of truth, progressing step by step.
+Don't leave everything to the AI. Humans decide; specifications are the source of truth; work proceeds incrementally.
 
-aide is a workflow framework consisting of **24 slash commands + auto-execution features**.
-Initialize your project with `/aide-init`, then execute commands along each phase to consistently manage requirements, design docs, test specs, code, and reports.
+- **Free mode (no init)**: Ambiguous instructions trigger a brainstorm suggestion instead of guessing; the work folder is confirmed if unset; once intent is clear, the right skill runs after announcing "Running X" (`aide-advisor`)
+- **Companion mode (after init)**: Generates companion tasks per segment and detects getting ahead / rework (`aide-journey`). Only the selected phases get a shallow folder (nothing is created arbitrarily, nothing is written outside the work folder)
 
 ```
-/aide-init         → Project initialization (scale: quick / standard / enterprise)
-/aide-pm-*         → PM & management (meeting notes, brainstorm, estimates, docs, prototypes...)
-/aide-dev-*        → Development (code, tests, quality reports...)
-/aide-review-*     → Review (code, documents, audit...)
-/aide-ops-*        → Operations & maintenance (intake, investigation, fix, close...)
+aide-init          → Initialize: pick segment, work folder, phases, deliverables (selection-based)
+aide-advisor      → Free-mode entry: proposes the right skill for an unspecified instruction and runs it after approval
+aide-pm-*          → PM (charter/KPI, management, minutes, estimate, slides, retro)
+aide-product-*        → Product ops (version-pinned problem solving, issue/config logs)
+aide-dev-*         → New development (spec, code, test, migrate) + V-model persona reviews
+aide-ops-*         → Existing ops (inquiry/issue/incident → investigate → fix → close)
+aide-review        → Launch persona-specific review agents
 ```
 
 ---
 
-## Core Principles
+## Principles
+
+**Three core principles:**
 
 | Principle | Description |
 |---|---|
-| **Human-in-the-Loop** | AI proposes and generates; humans decide and approve |
-| **Specification-Driven Development (SDD)** | Specifications are the single source of truth. Code implements specs, tests verify specs |
-| **Spec-Anchored** | Bidirectional sync between implementation and specs. Proposes spec updates when code changes |
-| **Phase-Driven** | Finalize deliverables in order before moving to the next phase. Iterative within each phase |
-| **Deliverable-Based** | Never proceed on verbal agreements alone. Each step produces concrete deliverables |
-| **Thought History Preservation** | Brainstorming and discussion processes are preserved in date-stamped files |
+| **Human-in-the-Loop** | The core of harness engineering. Humans inspect both feedforward (input/spec precision) and feedback (output checked against spec). Embodied by the pre-implementation approval gate and completion-time persona reviews |
+| **SSoT** | SDD and Spec-Anchored keep specs always current; both humans and AI converse/decide with documents as the source of truth |
+| **Proactive Companion** | Even with nothing specified, insert a confirm/brainstorm step and propose the right skill once intent is clear and run it after your approval |
+
+SSoT supports HITL's feedforward; HITL's feedback keeps SSoT current; the companion principle connects this loop to everyday dialogue.
+
+![aide entry points (free / companion mode) and the three core principles](assets/design-philosophy-principles.drawio.svg)
+
+> aide's entry points are "free mode" and "companion mode." The three core principles are the foundation of companion mode, and free mode also gains precision by invoking the same skills appropriately.
+
+**Operating rules:** selection-based on-demand generation / shallow folders, free interior / never create arbitrarily, never write outside the work folder / index-driven reading
 
 ---
 
-## Project Scales
+## Segments (4, single axis)
 
-Select a scale when running `/aide-init`. Folder structure, workflow, and quality gates vary by scale.
-
-| Scale | Use Case | Features |
+| Segment | ID | Purpose |
 |---|---|---|
-| **quick** | Prototypes, PoC, internal tools | Consolidated phases, prototype-to-spec reverse generation flow |
-| **standard** | Normal development projects (default) | Standard phase-driven flow |
-| **enterprise** | Compliance requirements | Audit trails, quality gates, traceability |
+| **PM** | `pm` | KPI/goal setting and project management |
+| **Product Operations** | `product` | Product configuration and problem solving (no coding) |
+| **New Development** | `dev` | Waterfall × SDD, AI-driven development |
+| **Existing Operations** | `ops` | Inquiry / issue / incident handling |
+
+Audit & traceability are opt-in options.
+
+![4 segments (single axis) × 2 usage modes](assets/design-philosophy-segments.drawio.svg)
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Initialize project (run once)
-/aide-init dev                    # New development (standard)
-/aide-init dev quick              # For prototyping
-/aide-init dev enterprise         # With audit support
-/aide-init ops                    # Operations & maintenance
+# Initialize (interactively pick segment, work folder, phases, deliverables)
+/aide-init                 # pm / product / dev / ops (multi-select)
 
-# 2. Follow the phase workflow
-/aide-pm-brainstorm               # standard/enterprise: Start from requirements
-/aide-pm-prototype                # quick: Start from prototype
-/aide-ops-new                     # ops: Start from intake
+# Or just give an instruction with nothing specified (free mode)
+# e.g. "Consider how to handle this incident file" → aide-advisor proposes the right ops skill and runs it after approval
 ```
 
-For detailed usage, see [.aide/README.md](.aide/README.md).
+See [.aide/README.md](.aide/README.md) for details.
 
 ---
 
 ## Workflow Overview
 
-### Quick (Prototype)
-
-```
-Prototype → Reverse spec generation → Code cleanup → Test
-```
-
-| Step | Commands |
+| Segment | Flow |
 |---|---|
-| Prototype | `pm-prototype` → verify → iterate |
-| Spec finalization | `pm-reverse-spec` → `pm-brainstorm` (deep dive) |
-| Code cleanup | `dev-code` → `review-code` |
-| Test | `dev-testspec` → `dev-test` |
+| **PM** | Charter (KPI/goals) → schedule/issues/members → retrospective |
+| **Product Ops** | Receive issue → version-pinned official-source search & resolution → config log |
+| **New Development** | Requirements → basic design → detail design/impl plan → implementation → unit → integration → system → operation tests (V-model persona review at each completion) |
+| **Existing Ops** | Intake (inquiry/issue/incident) → investigate → fix → close |
 
-### Standard (New Development)
+New Development (dev) runs a persona review at each phase completion along the V-model.
 
-```
-Requirements → Design → Planning → Implementation → Testing → Release
-```
-
-| Phase | Commands |
-|---|---|
-| Requirements | `meeting` → `brainstorm` → `diagram` → `analyze` |
-| Design | `brainstorm` → `diagram` → `analyze` |
-| Planning | `plan` → `estimate` |
-| Implementation | `dev-code` (Spec-Anchored: with spec sync check) |
-| Testing | `dev-testspec` → `dev-test` → `review-code` |
-| Release | `review-doc` → `export` → `slide` |
-
-### Enterprise (With Audit)
-
-Same flow as Standard + `review-audit` for quality gate verification at each phase completion.
-
-### Operations & Maintenance
-
-Parallel task management with Task IDs (`T-XXX`).
-
-```
-Intake(new) → Investigation(investigate) → Fix(fix) → Close(close)
-```
+![New Development: SDD / Spec-Anchored / V-model harness](assets/design-philosophy-process.drawio.svg)
 
 ---
 
-## Command List (24 commands)
+## Command Reference (27 skills)
 
-### Common (2)
-
+### Core (8)
 | Command | Purpose |
 |---|---|
-| `/aide-init` | Project initialization (scale: quick / standard / enterprise) |
-| `/aide-router` | Suggest commands based on current context |
+| `/aide-init` | Pick segment, confirm work folder, selection-based folder generation, profile |
+| `/aide-advisor` | Free-mode entry / "what should I do" advisor: analyze location, clarity check, then propose & run after approval |
+| `/aide-brainstorm` | Create/update deliverables via brainstorming (catalog-driven) |
+| `/aide-sync` | Reflection plan → OK gate → write back to documents |
+| `/aide-journey` | Companion tasks; detect getting-ahead / rework |
+| `/aide-review` | Launch persona-specific review agents |
+| `/aide-diagram` | Generate draw.io-compatible SVG diagrams |
+| `/aide-export` | Convert deliverables to HTML/PDF/docx/pptx |
 
-### PM & Management (11)
+### PM (6)
+`/aide-pm-charter` (KPI, goals, charter) / `/aide-pm-manage` (schedule, issues, members) / `/aide-pm-meeting` / `/aide-pm-estimate` / `/aide-pm-slide` / `/aide-pm-retro`
 
-| Command | Purpose |
-|---|---|
-| `/aide-pm-meeting` | Create meeting notes + issue tracking |
-| `/aide-pm-brainstorm` | Brainstorm → create/update deliverables |
-| `/aide-pm-analyze` | Interactive analysis (no file updates) |
-| `/aide-pm-diagram` | Generate draw.io-compatible SVG diagrams |
-| `/aide-pm-plan` | Create development plan |
-| `/aide-pm-estimate` | Create estimates (standard/rough) |
-| `/aide-pm-slide` | Create documents (slides/estimates/schedules/discussion materials) |
-| `/aide-pm-export` | Convert deliverables to HTML/PDF/docx |
-| `/aide-pm-prototype` | Generate prototype from rough requirements (for Quick) |
-| `/aide-pm-reverse-spec` | Reverse-generate specs from prototype |
-| `/aide-pm-retro` | Retrospective (KPT) |
+### Product Operations (2)
+`/aide-product-resolve` (version-pinned → web search → resolution) / `/aide-product-task` (issue management, config logs)
 
-### Review (3)
+### New Development (5)
+`/aide-dev-spec` (phase deliverables, prior-phase conformance) / `/aide-dev-code` (approval gate, Spec-Anchored) / `/aide-dev-testspec` / `/aide-dev-test` / `/aide-dev-migrate`
 
-| Command | Purpose |
-|---|---|
-| `/aide-review-code` | Code review (spec compliance, quality, security, coverage, static analysis). Use `--scope` to narrow focus |
-| `/aide-review-doc` | Document review (deliverable consistency, completeness, traceability audit) |
-| `/aide-review-audit` | Audit review (quality gates, compliance, audit trails). Enterprise only |
+### Existing Operations (6)
+`/aide-ops-inquiry` / `/aide-ops-issue` / `/aide-ops-incident` / `/aide-ops-investigate` / `/aide-ops-fix` / `/aide-ops-close`
 
-### Development (4)
-
-| Command | Purpose |
-|---|---|
-| `/aide-dev-code` | Create/modify code based on specs (Spec-Anchored: with spec sync check) |
-| `/aide-dev-testspec` | Create unit/integration test specifications |
-| `/aide-dev-test` | Run tests + collect evidence + generate reports |
-| `/aide-dev-migrate` | Dependency updates + CVE vulnerability checks |
-
-### Operations & Maintenance (4)
-
-| Command | Purpose |
-|---|---|
-| `/aide-ops-new` | Intake inquiry + create task |
-| `/aide-ops-investigate` | Task investigation & root cause analysis |
-| `/aide-ops-fix` | Task fix implementation |
-| `/aide-ops-close` | Document resolution + close |
-
-### Auto-Execution (on session start)
-
-| Feature | Target | Content |
-|---|---|---|
-| Task status display | ops projects | Task list + stagnation warnings + summary + action suggestions |
-| Issue status display | dev projects | Issue summary + stagnation warnings + action suggestions |
+### Review personas (`.aide/agents/`, 9)
+requirements / basic-design / detail-design (3 V-model) / code / security / document / source / pm / product-setting reviewer
 
 ---
 
-## Project Structure
+## Customization (never touch .aide)
 
-```
-.aide/                          ← aide core framework (Single Source of Truth)
-├── rules.md                    ← Common rules (master)
-├── skills/                     ← Skill definitions (24)
-├── templates/                  ← Deliverable & export templates
-├── scripts/sync-skills.sh      ← Wrapper batch generation
-└── README.md                   ← Usage guide
-.claude/skills/                 ← Claude Code wrappers (auto-generated)
-.agents/skills/                 ← Codex CLI wrappers (auto-generated)
-.github/skills/                 ← GitHub Copilot wrappers (auto-generated)
-CLAUDE.md                       ← Project-specific settings (generated by /aide-init)
-```
+**`.aide/` is the immutable framework core — never edit it.** All customization happens **outside `.aide/`**, so framework updates (replacing `.aide/`) never collide with your project-specific customizations.
 
-Running `/aide-init` generates a folder structure based on the selected scale:
+| What | Where (outside .aide) | Core (immutable) | sync |
+|---|---|---|---|
+| **Rules** | write directly in `CLAUDE.md` / `AGENTS.md` | `.aide/rules.md` | no |
+| **Skills** | create your own skills in `.claude/skills/` ・ `.agents/skills/` | `.aide/skills/` | no |
+| **Review agents** | create your own agents in `.claude/agents/` | `.aide/agents/` | no |
+| **Templates** | put overrides in `.aide-templates/` (project root) | `.aide/templates/` | no |
 
-### Quick
-
-```
-docs/
-├── 00_pm/                     ← Issue management
-├── specs/                     ← Requirements & design (consolidated)
-└── testing/                   ← Test specs & evidence
-```
-
-### Standard
-
-```
-docs/
-├── 00_pm/                     ← Issues, schedules, estimates
-├── 01_requirements/           ← Requirements docs, meeting notes, brainstorms
-├── 02_design/                 ← Design docs
-├── 03_plans/                  ← Development plans
-└── 04_testing/                ← Test specs & evidence
-```
-
-### Enterprise (Standard + Audit)
-
-```
-docs/
-├── ... (same as Standard)
-└── 05_audit/                  ← Audit trails, compliance register, quality metrics
-```
+- **Rules**: keep `.aide/rules.md` untouched; put project-specific rules/profile in `CLAUDE.md` / `AGENTS.md`
+- **Skills / agents**: add your own under `.claude/skills/` ・ `.agents/skills/` ・ `.claude/agents/`. sync never deletes or overwrites files it doesn't manage. Overriding an existing `aide-*` skill/persona is not supported — add a differently-named one instead
+- **Templates**: the deliverables catalog (`.aide/templates/deliverables-catalog.md`) and outline templates can be overridden by placing same-named files in `.aide-templates/`; skills read `.aide-templates/` first at runtime (no re-sync)
 
 ---
 
-## Requirements
+## Project Layout (consolidated to 2 systems)
 
-### Supported AI Tools
+```
+.aide/                          ← shared framework (immutable — never edit)
+├── rules.md                    ← common rules (master)
+├── skills/                     ← skill source (27)
+├── agents/                     ← review agent source (9)
+├── templates/
+│   ├── deliverables-catalog.md ← deliverables catalog
+│   ├── deliverables/           ← outline templates
+│   └── export/                 ← conversion templates
+└── scripts/sync-skills.sh / .ps1  ← wrapper generation (bash / PowerShell)
+.aide-templates/                ← ★custom: catalog/template overrides (optional, outside .aide)
+CLAUDE.md                       ← Claude Code → @.aide/rules.md + aide profile (★Rules custom)
+AGENTS.md                       ← GitHub Copilot + Codex (★Rules custom)
+.claude/skills/ , .claude/agents/  ← generated wrappers ＋ ★your own skills/agents
+.agents/skills/                 ← generated wrappers ＋ ★your own skills
+```
 
-| Tool | Status |
+> Only two rule files (**CLAUDE.md** and **AGENTS.md**) and two wrapper systems (**`.claude/skills/`** and **`.agents/skills/`**).
+> Copilot reads AGENTS.md + `.agents/skills/`, so `.github/copilot-instructions.md`, `.github/skills/`, and `.github/prompts/` are not used.
+
+### Maintaining skills
+
+```bash
+bash .aide/scripts/sync-skills.sh            # POSIX (bash)
+pwsh -File .aide/scripts/sync-skills.ps1     # Windows (PowerShell, no WSL2)
+```
+Edit only the sources (`.aide/skills/`, `.aide/agents/`); regenerate wrappers via sync.
+
+---
+
+## Environments
+
+| Environment | Support |
 |---|---|
-| **Claude Code** | Full support — run all skills with `/aide-*` commands |
-| **GitHub Copilot** | Full support — reference skills in Agent Mode |
-| **OpenAI Codex CLI** | Supported — loads rules via AGENTS.md |
-
-### Prerequisites
+| WSL2 / macOS / Linux | Recommended (bash sync) |
+| **Windows 11 / PowerShell** | **Supported (no WSL2)** — `sync-skills.ps1`; Python via `python`/`py` |
+| Git Bash (Windows) | Supported |
 
 - **Required**: Git only
-- **Recommended OS**: WSL2 / macOS / Linux (Git Bash compatible, PowerShell not recommended)
-- **For exports**: marked, marp-cli, pandoc, etc. (installation guided when running skills)
+- **For export / Office import**: marked / marp-cli / pandoc / ansi2html / python-pptx / openpyxl, etc. (guided on first use, OS-specific commands)
 
 ---
 

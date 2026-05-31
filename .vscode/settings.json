@@ -1,0 +1,6 @@
+{
+  "markdown.marp.themes": [
+    "./.aide/templates/export/marp-theme.css"
+  ],
+  "markdown.marp.enableHtml": true
+}

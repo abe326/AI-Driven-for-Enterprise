@@ -13,12 +13,16 @@ import sys
 from io import StringIO
 from pathlib import Path
 
+from office_common import (
+    md_table_cell,
+    validate_input_file,
+    fail_missing_dependency,
+)
+
 
 def cell_value_to_str(cell) -> str:
     """セル値を文字列に変換する。"""
-    if cell.value is None:
-        return ""
-    return str(cell.value).replace("\n", " ").replace("|", "\\|").strip()
+    return md_table_cell(cell.value)
 
 
 def sheet_to_md_table(ws, max_rows: int) -> tuple[list[str], dict]:
@@ -44,19 +48,17 @@ def sheet_to_md_table(ws, max_rows: int) -> tuple[list[str], dict]:
             for col in range(merged_range.min_col, merged_range.max_col + 1):
                 merged_cells[(row, col)] = value if value is not None else ""
 
-    # 行数制限
-    display_rows = rows[:max_rows] if total_rows > max_rows else rows
-    if total_rows > max_rows:
-        stats["truncated"] = True
+    stats["truncated"] = total_rows > max_rows
+    display_rows = rows[:max_rows]
 
     for i, row in enumerate(display_rows):
         stats["rows"] += 1
         cells: list[str] = []
-        for j, cell in enumerate(row, 1):
+        for cell in row:
             # 結合セルの場合は結合元の値を使用
             key = (cell.row, cell.column)
             if key in merged_cells:
-                cells.append(str(merged_cells[key]).replace("\n", " ").replace("|", "\\|").strip())
+                cells.append(md_table_cell(merged_cells[key]))
             else:
                 cells.append(cell_value_to_str(cell))
 
@@ -68,7 +70,7 @@ def sheet_to_md_table(ws, max_rows: int) -> tuple[list[str], dict]:
 
     if stats["truncated"]:
         lines.append("")
-        lines.append(f"> ⚠️ {total_rows}行中 {max_rows}行まで表示（`--max-rows` で変更可能）")
+        lines.append(f"> 警告: {total_rows}行中 {max_rows}行まで表示（`--max-rows` で変更可能）")
 
     return lines, stats
 
@@ -81,9 +83,8 @@ def sheet_to_csv(ws, max_rows: int) -> tuple[str, dict]:
 
     rows = list(ws.iter_rows())
     total_rows = len(rows)
-    display_rows = rows[:max_rows] if total_rows > max_rows else rows
-    if total_rows > max_rows:
-        stats["truncated"] = True
+    stats["truncated"] = total_rows > max_rows
+    display_rows = rows[:max_rows]
 
     for row in display_rows:
         stats["rows"] += 1
@@ -97,9 +98,7 @@ def convert_xlsx(input_path: Path, output_path: Path, max_rows: int, fmt: str) -
     try:
         from openpyxl import load_workbook
     except ImportError:
-        print("エラー: openpyxl が未インストールです。", file=sys.stderr)
-        print("  pip install openpyxl", file=sys.stderr)
-        sys.exit(1)
+        fail_missing_dependency("openpyxl")
 
     wb = load_workbook(str(input_path), read_only=False, data_only=True)
     all_stats = {"sheets": 0, "total_rows": 0}
@@ -114,7 +113,7 @@ def convert_xlsx(input_path: Path, output_path: Path, max_rows: int, fmt: str) -
             all_stats["total_rows"] += stats["rows"]
             print(f"  シート「{ws.title}」→ {sheet_output.name} ({stats['rows']}行)")
             if stats["truncated"]:
-                print(f"    ⚠️ 行数制限により切り詰め（上限: {max_rows}行）")
+                print(f"    警告: 行数制限により切り詰め（上限: {max_rows}行）")
     else:
         # Markdown: 1ファイルにまとめる
         lines: list[str] = []
@@ -144,13 +143,7 @@ def main():
     parser.add_argument("--format", choices=["md", "csv"], default="md", help="出力形式（デフォルト: md）")
     args = parser.parse_args()
 
-    input_path = Path(args.input).resolve()
-    if not input_path.exists():
-        print(f"エラー: ファイルが見つかりません: {input_path}", file=sys.stderr)
-        sys.exit(1)
-    if input_path.suffix.lower() != ".xlsx":
-        print(f"エラー: .xlsx ファイルを指定してください: {input_path}", file=sys.stderr)
-        sys.exit(1)
+    input_path = validate_input_file(args.input, ".xlsx")
 
     default_ext = ".csv" if args.format == "csv" else ".md"
     output_path = Path(args.output).resolve() if args.output else input_path.with_suffix(default_ext)

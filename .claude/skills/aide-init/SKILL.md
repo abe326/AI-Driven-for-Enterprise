@@ -1,6 +1,6 @@
 ---
 name: aide-init
-description: プロジェクトを dev / ops / dev+ops で初期化する。フォルダ構成・CLAUDE.md・必要ツールを一括セットアップ
+description: プロジェクトをセグメント別に初期化する。作業フォルダ確認・選択式フォルダ生成・プロファイル生成を行う
 ---
 
 @../../.aide/skills/aide-init/SKILL.md

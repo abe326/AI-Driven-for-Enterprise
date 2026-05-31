@@ -12,16 +12,17 @@ import argparse
 import sys
 from pathlib import Path
 
+from office_common import (
+    rows_to_md_table,
+    validate_input_file,
+    default_images_dir,
+    fail_missing_dependency,
+)
+
 
 def extract_table_as_md(table) -> list[str]:
     """pptx テーブルを Markdown テーブルに変換する。"""
-    lines: list[str] = []
-    for i, row in enumerate(table.rows):
-        cells = [cell.text.replace("\n", " ").strip() for cell in row.cells]
-        lines.append("| " + " | ".join(cells) + " |")
-        if i == 0:
-            lines.append("| " + " | ".join(["---"] * len(cells)) + " |")
-    return lines
+    return rows_to_md_table([[cell.text for cell in row.cells] for row in table.rows])
 
 
 def convert_pptx(input_path: Path, output_path: Path, images_dir: Path) -> dict:
@@ -30,9 +31,7 @@ def convert_pptx(input_path: Path, output_path: Path, images_dir: Path) -> dict:
         from pptx import Presentation
         from pptx.enum.shapes import MSO_SHAPE_TYPE
     except ImportError:
-        print("エラー: python-pptx が未インストールです。", file=sys.stderr)
-        print("  pip install python-pptx", file=sys.stderr)
-        sys.exit(1)
+        fail_missing_dependency("python-pptx")
 
     prs = Presentation(str(input_path))
     lines: list[str] = []
@@ -119,16 +118,10 @@ def main():
     parser.add_argument("--images-dir", help="画像抽出先ディレクトリ（省略時: <入力ファイル名>_images）")
     args = parser.parse_args()
 
-    input_path = Path(args.input).resolve()
-    if not input_path.exists():
-        print(f"エラー: ファイルが見つかりません: {input_path}", file=sys.stderr)
-        sys.exit(1)
-    if input_path.suffix.lower() != ".pptx":
-        print(f"エラー: .pptx ファイルを指定してください: {input_path}", file=sys.stderr)
-        sys.exit(1)
+    input_path = validate_input_file(args.input, ".pptx")
 
     output_path = Path(args.output).resolve() if args.output else input_path.with_suffix(".md")
-    images_dir = Path(args.images_dir).resolve() if args.images_dir else input_path.parent / f"{input_path.stem}_images"
+    images_dir = Path(args.images_dir).resolve() if args.images_dir else default_images_dir(input_path)
 
     stats = convert_pptx(input_path, output_path, images_dir)
 
