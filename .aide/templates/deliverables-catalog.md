@@ -4,6 +4,7 @@
 > スキルはこれを読み、**選択式**で成果物を提示する（「既定」=初期選択）。利用者は成果物を増減できる。
 > 会社/プロジェクトで調整する場合は `.aide-templates/deliverables-catalog.md`（プロジェクト直下・`.aide/` の外）に同じ表を置いて上書きする（このファイルは編集しない）。
 > テンプレートパスは `.aide/templates/deliverables/<file>` 配下。`.aide-templates/deliverables/<file>` に同名があればそちらが優先される。
+> 提出用の変換テンプレート（スライドテーマ・見積・スケジュール・ディスカッション・汎用ドキュメント）は本カタログの対象外で、`.aide/templates/export/` 配下の対象物フォルダに持つ。こちらも `.aide-templates/export/` で追加/優先される（スライドテーマは和集合で「追加」。詳細は [rules.md §成果物カタログ](../rules.md#成果物カタログ) の export 系項目）。
 
 ## PM業務（pm）
 

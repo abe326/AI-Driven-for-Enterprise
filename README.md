@@ -169,19 +169,47 @@ SSoT が HITL のフィードフォワードを支え、HITL のフィードバ�
 
 **`.aide/` はフレームワーク核として一切編集しない（不可侵）。** カスタマイズはすべて **`.aide/` の外**で行う。これにより、フレームワークの更新（`.aide/` の差し替え）とプロジェクト固有のカスタマイズが衝突しない。
 
-| カスタマイズ対象 | 設定先（.aide の外） | コア（不可侵） | sync |
-|---|---|---|---|
-| **Rules** | `CLAUDE.md` / `AGENTS.md` に直接記述 | `.aide/rules.md` | 不要 |
-| **Skills** | `.claude/skills/` ・ `.agents/skills/` に独自スキルを直接作成 | `.aide/skills/` | 不要 |
-| **レビューエージェント** | `.claude/agents/` に独自エージェントを直接作成 | `.aide/agents/` | 不要 |
-| **Templates** | `.aide-templates/`（プロジェクト直下）に上書きを置く | `.aide/templates/` | 不要 |
+### 何がカスタマイズできるか × どう指定するか（一覧）
 
-> `.aide/` は読み取り専用のフレームワーク核。sync はコア正本（`.aide/skills/`・`.aide/agents/`）からラッパーを生成するだけで、利用者が `.claude/skills/`・`.agents/skills/`・`.claude/agents/` に置いた独自スキル／エージェントは**消さない・上書きしない**。既存 `aide-*` の挙動を変えたい場合は別名で独自追加する（上書きは非対応）。
+| # | カスタマイズ対象 | 指定先（`.aide` の外） | 指定方法 | 反映方式 | コア（不可侵） |
+|---|---|---|---|---|---|
+| 1 | **Rules**（プロジェクト固有ルール） | `CLAUDE.md` / `AGENTS.md` | ファイルに直接追記 | 上書き＝追記（共通ルールに上乗せ） | `.aide/rules.md` |
+| 2 | **成果物カタログ**（どのフェーズで何を作るか） | `.aide-templates/deliverables-catalog.md` | 正本を下敷きに同名ファイルを置く | **上書き**（案件側を優先） | `.aide/templates/deliverables-catalog.md` |
+| 3 | **章立て雛形**（成果物の構成） | `.aide-templates/deliverables/<name>.md` | 正本を下敷きに同名ファイルを置く | **上書き**（ファイル単位で丸ごと差し替え） | `.aide/templates/deliverables/<name>.md` |
+| 4 | **Export HTML**（見積/スケジュール/ディスカッション/汎用doc） | `.aide-templates/export/<対象物>/<file>` | 正本と同じ相対パスに同名ファイルを置く | **上書き**（同名を優先） | `.aide/templates/export/<対象物>/` |
+| 5 | **スライドテーマ**（配色・ロゴ・作図ルール） | `.aide-templates/export/slide/themes/<name>/` | テーマ名フォルダを足す | **追加（和集合）**／同名のときだけ上書き | `.aide/templates/export/slide/themes/` |
+| 6 | **独自スキル** | `.claude/skills/<name>/` ・ `.agents/skills/<name>/` | 新規スキルを直接作成 | 追加（sync は消さない・触らない） | `.aide/skills/` |
+| 7 | **独自レビューエージェント** | `.claude/agents/<name>.md` | 新規エージェントを直接作成 | 追加（sync は消さない・触らない） | `.aide/agents/` |
+| 8 | **案件の既定スライドテーマ** | `CLAUDE.md` の aideプロファイル | `スライドテーマ: <name>` 行を書く | プロファイル参照（個別 frontmatter が優先） | — |
+
+> **上書き と 追加 の違い**
+> - **上書き**（2・3・4）= 正本と**同名**のファイルを案件側に置くと、スキルが実行時に案件側を**先に読む**（正本は読まれない）。差し替え型。
+> - **追加（和集合）**（5）= 正本のテーマを残したまま**選択肢が増える**。同名フォルダのときだけ案件側が優先される。
+> - Templates 系（2〜5）は **`sync` 不要・即反映**。スキルが実行時に `.aide-templates/` → `.aide/templates/` の順で読むため。
+
+> **指定できないもの（意図的な制約）**
+> - **既存 `aide-*` スキル／レビューペルソナの「挙動上書き」は非対応**。フレームワーク提供物はそのまま使い、挙動を変えたい場合は**別名で独自追加**する（6・7）。
+> - 共通ルール `.aide/rules.md` の直接編集は不可。プロジェクト固有は `CLAUDE.md` / `AGENTS.md` へ（1）。
 
 ### Rules（プロジェクト固有ルール）
 
 - 共通ルール `.aide/rules.md` は**編集しない**。プロジェクト固有のルール・方針は `CLAUDE.md`（Claude Code）/ `AGENTS.md`（Copilot・Codex）に直接記述する
 - `aide-init` を実行すると、`CLAUDE.md` がプロジェクト固有設定（`@.aide/rules.md` 参照 ＋ aideプロファイル）に置き換わる。プロファイル（セグメント・作業フォルダ・有効フェーズ等）もここで管理する
+
+**指定例**（`CLAUDE.md`）:
+
+```markdown
+@.aide/rules.md
+
+## aideプロファイル
+- セグメント: dev
+- 作業フォルダ: docs/
+- スライドテーマ: corporate     # 案件の既定テーマ（#8）
+
+## プロジェクト固有ルール
+- コミットメッセージは日本語で書く
+- 設計書の章番号を必ずコミットに紐づける
+```
 
 ### Skills / レビューエージェント
 
@@ -190,13 +218,57 @@ SSoT が HITL のフィードフォワードを支え、HITL のフィードバ�
 - sync は aide 管理外のスキル・エージェントを**消さない・上書きしない**ため共存できる（`sync` 不要）
 - **既存 `aide-*` スキル／レビューペルソナの「上書き（挙動変更）」は非対応**。フレームワーク提供物としてそのまま使い、挙動を変えたい場合は**別名の独自スキル／エージェントを追加**する
 
+**指定例**（独自スキルを追加）:
+
+```
+.claude/skills/my-release-note/SKILL.md   # 独自スキル（別名で追加）
+.claude/agents/my-api-reviewer.md         # 独自レビューエージェント
+```
+
 ### Templates（成果物テンプレート）
 
 - カタログ・章立て雛形の上書きは、プロジェクト直下 **`.aide-templates/`**（`.aide/` の外）に置く
-  - `.aide-templates/deliverables-catalog.md` … カタログ上書き
-  - `.aide-templates/deliverables/<name>.md` … 章立て雛形上書き
+  - `.aide-templates/deliverables-catalog.md` … カタログ上書き（#2）
+  - `.aide-templates/deliverables/<name>.md` … 章立て雛形上書き（#3）
 - スキル（`aide-init` / `aide-brainstorm` / `aide-dev-spec` / `aide-pm-charter` 等）は実行時に **`.aide-templates/` を優先**し、無ければ `.aide/templates/` を読む
 - 正本 `.aide/templates/` は編集しない。スキルが実行時に直接読むため**即反映**（`sync` 不要）
+- `aide-init` の「標準メニューを調整しますか？」に Yes で、正本を下敷きにした `.aide-templates/` を**自動生成**できる（手作業不要）
+- 章立て雛形は**ファイル単位で丸ごと差し替え**になる。1章だけ足す場合も正本をコピーして編集するため、`.aide/` 側の雛形更新は案件側の上書きには自動追従しない点に注意
+
+**指定例**（要件書の章立てを案件用に差し替え）:
+
+```
+.aide-templates/deliverables/requirements.md   # 正本をコピーして章を追加・編集
+```
+
+### Export / スライドテーマ
+
+- 提出用の変換テンプレートは `.aide/templates/export/` を正本に**対象物ごとフォルダ**（`slide/` `document/` `estimate/` `schedule/` `discussion/`）で持つ
+- HTML テンプレート等の**単一ファイル**は `.aide-templates/export/<対象物>/<file>` に同名で置くと**上書き**（#4）
+- **スライドテーマは「上書き」ではなく「追加」**（#5）。`.aide-templates/export/slide/themes/<name>/` を足すと、正本テーマ（`corporate`・`proposal`）と**和集合**で選択肢に並ぶ
+  - **命名規約**: フォルダ名 ＝ CSS 先頭の `/* @theme <name> */` ＝ MD frontmatter の `theme:` 値を**一致**させる（既定 `corporate`）
+  - テーマフォルダ構成: `theme.css`（必須）＋任意で `assets/`（画像・ロゴ）・`rules.md`（テーマ固有の作図ルール）
+  - 既定配色だけ変えたい場合は、同名 `.aide-templates/export/slide/themes/corporate/theme.css` を置けば案件側が優先される
+
+**指定例**（案件テーマを追加して使う）:
+
+```css
+/* .aide-templates/export/slide/themes/acme/theme.css */
+/* @theme acme */
+:root {
+  --color-primary: #16a34a;   /* 案件のブランドカラーに差し替え */
+  --color-accent:  #15803d;
+}
+```
+
+```markdown
+---
+marp: true
+theme: acme        # ← どのテーマを使うかは MD の frontmatter で指定（#5）
+---
+```
+
+> どのテーマを使うかは MD スライドの frontmatter `theme:` で指定する（Marp 標準キー）。案件の既定テーマは `CLAUDE.md` のプロファイル `スライドテーマ:` 行で指定でき（#8）、MD 側の個別指定があればそちらが優先される。
 
 ---
 
@@ -210,9 +282,12 @@ SSoT が HITL のフィードフォワードを支え、HITL のフィードバ�
 ├── templates/
 │   ├── deliverables-catalog.md ← 成果物カタログ
 │   ├── deliverables/           ← 章立て雛形
-│   └── export/                 ← 変換テンプレート
+│   └── export/                 ← 変換テンプレート（対象物ごとフォルダ）
+│       ├── slide/              ←   slide-template.md ＋ themes/<name>/theme.css
+│       ├── document/ estimate/ schedule/ discussion/  ← 各 HTML テンプレート
+│       └── metadata.yaml / scripts/  ← 共通メタデータ・変換スクリプト
 └── scripts/sync-skills.sh / .ps1  ← ラッパー生成（bash / PowerShell）
-.aide-templates/                ← ★カスタム: 成果物カタログ・雛形の上書き（任意・.aide の外）
+.aide-templates/                ← ★カスタム: カタログ・雛形・export の上書き／スライドテーマ追加（任意・.aide の外）
 CLAUDE.md                       ← Claude Code用 → @.aide/rules.md ＋ aideプロファイル（★Rules カスタム先）
 AGENTS.md                       ← GitHub Copilot + Codex 用（★Rules カスタム先）
 .claude/skills/ , .claude/agents/  ← 自動生成ラッパー ＋ ★独自スキル/エージェント

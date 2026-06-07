@@ -62,6 +62,12 @@ short_description: プロジェクトをセグメント別に初期化する。�
 3. **正本（`.aide/templates/`）は編集しない**。上書きは常に `.aide-templates/` 側に置く
 4. スキルは実行時に `.aide-templates/` を優先して読むため、変更は即反映される（`sync` 再実行は不要）
 
+**提出用テンプレート（スライドテーマ・export 系）を調整する場合**も同じく `.aide-templates/export/` 側に置く（正本は編集しない）。
+- **スライドテーマの追加**（案件用の配色・ロゴ等）: `.aide/templates/export/slide/themes/corporate/theme.css` を下敷きに `.aide-templates/export/slide/themes/<name>/theme.css` を作成（先頭 `/* @theme <name> */`、`:root` のカラーを差し替え）。任意で `assets/`（画像）・`rules.md`（テーマ固有ルール）を同フォルダに置く。**既定テーマは消さず「追加」**され、生成時に選択肢として並ぶ
+- **既定配色だけ変えたい**: 同名 `.aide-templates/export/slide/themes/corporate/theme.css` を置けば案件側が優先される
+- **見積・スケジュール・ディスカッション・汎用ドキュメントの HTML を変えたい**: `.aide/templates/export/<対象物>/<file>` を下敷きに `.aide-templates/export/<対象物>/<file>` を作成（同名上書き）
+- 案件の既定スライドテーマが決まっていれば、プロファイルの「スライドテーマ」行（手順4）に記録する
+
 「会社共通の標準にしたい」と言われた場合は、`.aide-templates/` を会社の配布物に含めれば全プロジェクトに効く旨を案内する。
 
 ### 3. 作業フォルダと選択フォルダの生成
@@ -108,6 +114,7 @@ short_description: プロジェクトをセグメント別に初期化する。�
 - 有効フェーズ: <選択フェーズをカンマ区切り>
 - 成果物: <選択した成果物をフェーズ順に / 区切りで>
 - オプション: <選択オプション / なし>
+- スライドテーマ: <既定テーマ名 / corporate>   # スライドを使う場合。MD frontmatter の theme で個別上書き可
 
 ## プロジェクト概要
 - プロジェクト名: <名称>

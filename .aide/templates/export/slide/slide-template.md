@@ -1,6 +1,6 @@
 ---
 marp: true
-theme: aide-corporate
+theme: corporate        # 使うテーマ名。slide/themes/<name>/ のフォルダ名と一致させる（既定: corporate。例: proposal、案件カスタム）
 paginate: true
 footer: "YYYY-MM-DD | [会社名/部署名]"
 ---

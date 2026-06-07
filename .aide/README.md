@@ -103,7 +103,8 @@ Enterprise 向けは全セグメント共通。監査・トレーサビリティ
 - **Rules のカスタム** … `CLAUDE.md` / `AGENTS.md` に直接記述（共通 `.aide/rules.md` は編集しない）
 - **Skills / レビューエージェントのカスタム** … 独自スキルは `.claude/skills/`・`.agents/skills/`、独自エージェントは `.claude/agents/` に直接作成。sync は aide 管理外のものを消さない・上書きしない。既存 `aide-*` の上書きは非対応（別名で追加）
 - **Templates のカスタム** … `.aide-templates/`（プロジェクト直下・`.aide/` の外）にカタログ・雛形の上書きを置く。`aide-init` が「標準メニューを調整しますか？」に Yes で `.aide-templates/` を自動生成
-- カタログ・雛形は実行時読み込み＝**編集即反映、`sync` 再実行不要**
+- **Export/スライドテーマのカスタム** … 提出用変換テンプレートは `.aide/templates/export/` を正本に**対象物ごとフォルダ**（`slide/` `document/` `estimate/` `schedule/` `discussion/`）で持ち、`.aide-templates/export/` で優先される。**スライドテーマは「上書き」ではなく「追加」**＝`.aide-templates/export/slide/themes/<name>/theme.css` を足すと選択肢が増える（フォルダ名＝`@theme` 名＝MD frontmatter `theme:`、既定 `corporate`）
+- カタログ・雛形・export テンプレートは実行時読み込み＝**編集即反映、`sync` 再実行不要**
 
 ### 3大原則
 1. **Human-in-the-Loop** — ハーネスエンジニアリングの大原則。AIへのフィードフォワード（インプットの精度）とフィードバック（アウトプットの仕様照合）を人間が検査。実装前の承認ゲートと完了時のペルソナレビューで体現
@@ -130,12 +131,16 @@ project-root/
 │   ├── templates/
 │   │   ├── deliverables-catalog.md  # 成果物カタログ（マニフェスト）
 │   │   ├── deliverables/            # 成果物の章立て雛形
-│   │   └── export/                  # 変換テンプレート
+│   │   └── export/                  # 変換テンプレート（対象物ごとフォルダ）
+│   │       ├── slide/               #   スライド: slide-template.md ＋ themes/<name>/theme.css
+│   │       ├── document/ estimate/ schedule/ discussion/  # 各 HTML テンプレート
+│   │       ├── metadata.yaml        #   共通メタデータ
+│   │       └── scripts/             #   変換スクリプト（md2pptx 等）
 │   └── scripts/
 │       ├── sync-skills.sh           # ラッパー生成（bash）
 │       └── sync-skills.ps1          # ラッパー生成（PowerShell / Windows）
 │
-├── .aide-templates/                 # ◆カスタム: カタログ/雛形の上書き（任意・.aide の外）
+├── .aide-templates/                 # ◆カスタム: カタログ/雛形/export の上書き・テーマ追加（任意・.aide の外）
 ├── CLAUDE.md                        # Claude Code用 → @.aide/rules.md ＋ aideプロファイル（◆Rules カスタム）
 ├── AGENTS.md                        # Copilot / Codex用 → .aide/rules.md 参照（◆Rules カスタム）
 │
@@ -195,3 +200,11 @@ pwsh -File .aide/scripts/sync-skills.ps1
 | Miller's Law / 認知負荷理論 | Miller(1956) / Sweller(1988) | 1スライドの情報量制御 |
 
 コンテンツ品質は So What?／数字／固有名詞／行動 テストで担保。情報不足時は薄く埋めず、必要データをユーザーに確認する。
+
+### スライドテーマ（案件別・追加方式）
+
+スライドは Marp 形式で、テーマを**案件ごとに複数**持てる。テーマは `slide/themes/<name>/` フォルダ単位で管理し、`theme.css`（必須）＋任意の `assets/`（画像）・`rules.md`（テーマ固有ルール）をまとめる。
+
+- **どのテーマを使うかは MD の frontmatter `theme:` で指定**（Marp 標準キー）。命名規約はフォルダ名＝CSS 先頭の `@theme` 名＝`theme:` 値を一致させる（既定 `corporate`）。
+- **テーマは「上書き」ではなく「追加」**: 案件側 `.aide-templates/export/slide/themes/<name>/` を足すと、正本のテーマ（`corporate`・`proposal` 等）と**和集合**で選択肢に並ぶ（同名フォルダのときだけ案件側が優先）。
+- **配色の真実源は `theme.css` の `:root`**。Marp 経路（プレビュー/HTML/PDF）は CSS をそのまま使い、PPTX 経路（`md2pptx.py`）は同じ `:root` の `--color-*` をパースして配色を合わせる（二重管理を回避）。

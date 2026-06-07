@@ -1,0 +1,44 @@
+/* @theme proposal */
+
+/* レイアウト・コンポーネント規則は corporate を継承し、カラーパレットだけ差し替える。
+   - Marp 経路（プレビュー/HTML/PDF）: @import 'corporate' でレイアウトを取り込む
+     （変換時に corporate テーマも --theme-set へ登録されている前提）
+   - PPTX 経路（md2pptx.py）: 下記 :root の --color-* をパースして配色を決めるため、
+     色変数はこのファイルに明示する（@import 先までは辿らない）
+   別テーマを作る場合はこのファイルを複製し、テーマ名（@theme / フォルダ名）と
+   :root のカラーだけ変更すればよい。 */
+
+@import 'corporate';
+
+:root {
+  /* === 提案向けテーマ（ティール×コーラルの配色サンプル） === */
+  --color-primary: #0d9488;        /* ティール */
+  --color-primary-light: #14b8a6;
+  --color-primary-dark: #0f766e;
+  --color-accent: #f97316;         /* コーラル */
+  --color-text: #1f2937;
+  --color-text-light: #6b7280;
+  --color-bg: #ffffff;
+  --color-bg-sub: #f0fdfa;         /* 薄ティール */
+  --color-border: #d1d5db;
+  --font-family-base: 'Noto Sans JP', 'Hiragino Sans', 'Meiryo', sans-serif;
+  --font-family-code: 'Cascadia Code', 'Source Han Code JP', monospace;
+  --title-area-height: 80px;
+
+  --font-size-h1: 39px;
+  --font-size-h2: 31px;
+  --font-size-h3: 25px;
+  --font-size-body: 20px;
+  --font-size-sub: 17px;
+  --font-size-note: 14px;
+  --font-size-caption: 12px;
+
+  /* 追加カラー（corporate と同キー・派生色） */
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f97316;
+  --color-success-light: #f0fdf4;
+  --color-danger-light: #fef2f2;
+  --color-primary-lighter: #ccfbf1;   /* 最薄ティール */
+  --color-accent-light: #fff7ed;      /* 薄コーラル */
+}

@@ -25,7 +25,11 @@ short_description: 資料を自動判定して生成する（スライド/見積
 
 ### 3. 生成（CRAP 原則）
 - **CRAP**（Contrast/Repetition/Alignment/Proximity）で視認性を整える
-- スライドは Marp 形式（`.aide/templates/export/marp-theme.css` テーマ）
+- スライドは Marp 形式。雛形は `.aide/templates/export/slide/slide-template.md`（`.aide-templates/export/slide/` 優先）
+- **テーマの決定**: ①ユーザーが今回のテーマを指定すればそれ ②なければプロファイルの「スライドテーマ」行 ③それも無ければ既定 `corporate`。決めたテーマ名を frontmatter の `theme:` に書く
+- **利用可能なテーマの提示**: `.aide/templates/export/slide/themes/*/` と `.aide-templates/export/slide/themes/*/` のフォルダ名を走査して一覧化（和集合・同名は案件側優先）。複数あれば選択肢として提示する
+- 選んだテーマに `themes/<name>/rules.md` があれば読み、テーマ固有の作図ルール（配色の使い分け・ロゴ配置等）に従う
+- 新しい案件テーマを作りたいと言われたら、`.aide-templates/export/slide/themes/<name>/theme.css`（先頭 `/* @theme <name> */`）の追加を案内する。既定の `corporate/theme.css` を下敷きに、`:root` のカラーだけ差し替えるのが簡単（`.aide/` 正本は編集しない）
 - 作業フォルダの該当フェーズの `slides`（無ければフェーズ直下）に出力
 
 ### 4. 仕上げ・エクスポート

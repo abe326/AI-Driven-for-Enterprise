@@ -30,7 +30,8 @@ from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 
 # ============================================================
-# カラーパレット（marp-theme.css :root 変数に準拠）
+# カラーパレット（既定テーマ slide/themes/corporate/theme.css の :root に準拠。
+# 実行時に apply_theme() が選択テーマの :root で上書きする＝ここは既定値/フォールバック）
 # ============================================================
 COLOR_PRIMARY       = "2563eb"   # --color-primary       青
 COLOR_PRIMARY_DARK  = "1d4ed8"   # --color-primary-dark  濃青
@@ -941,8 +942,11 @@ def _render_two_column(slide, data: dict, layout_name: str):
 
 
 def _render_column_card(slide, content: str, x_in, top_in, w_in, h_in,
-                        bg: str = COLOR_BG_SUB, rounded: bool = False):
+                        bg: str = None, rounded: bool = False):
     """カラムカードを描画する。"""
+    # テーマ適用後の最新値を参照する（定義時束縛を避けるため None 既定）
+    if bg is None:
+        bg = COLOR_BG_SUB
     # カード背景（角丸オプション付き）
     card = slide.shapes.add_shape(
         1, _in(x_in), _in(top_in), _in(w_in), _in(h_in)
@@ -1160,6 +1164,99 @@ def show_pandoc_guide(input_md: str, output_pptx: str):
 
 
 # ============================================================
+# テーマ解決（theme.css :root → カラーパレット）
+# ============================================================
+#
+# スライドのテーマは「フォルダ名 = CSS 先頭の @theme 名 = MD frontmatter の theme:」を
+# 一致させる規約。CSS の :root に定義された --color-* を真実源とし、ここでパースして
+# モジュール冒頭のカラー定数（COLOR_*）を上書きする。これにより Marp 経路（CSS）と
+# PPTX 経路（本スクリプト）で同じテーマから同じ配色が得られ、二重管理を避けられる。
+#
+# 解決順（テーマ名）: CLI --theme > MD frontmatter の theme: > 既定 corporate
+#   （metadata.yaml / プロファイルの既定テーマは aide-pm-slide が frontmatter に反映する）
+# 解決順（CSS パス）: .aide-templates/export/...（案件カスタム・優先）→ 正本
+
+DEFAULT_THEME = "corporate"
+_THEME_ALIASES = {"aide-corporate": "corporate"}  # 旧テーマ名の後方互換
+
+# CSS 変数名 → モジュール冒頭のカラー定数名
+_THEME_VAR_TO_CONST = {
+    "color-primary":         "COLOR_PRIMARY",
+    "color-primary-dark":    "COLOR_PRIMARY_DARK",
+    "color-primary-light":   "COLOR_PRIMARY_LIGHT",
+    "color-accent":          "COLOR_ACCENT",
+    "color-text":            "COLOR_TEXT",
+    "color-text-light":      "COLOR_TEXT_LIGHT",
+    "color-bg":              "COLOR_BG",
+    "color-bg-sub":          "COLOR_BG_SUB",
+    "color-border":          "COLOR_BORDER",
+    "color-primary-lighter": "COLOR_PRIMARY_LIGHTER",
+    "color-accent-light":    "COLOR_ACCENT_LIGHT",
+}
+
+_ROOT_VAR_RE = re.compile(r"--([\w-]+)\s*:\s*#([0-9a-fA-F]{6})\b")
+_FRONTMATTER_THEME_RE = re.compile(r"^\s*theme:\s*[\"']?([\w-]+)", re.MULTILINE)
+
+
+def extract_frontmatter_theme(md_text: str):
+    """Marp frontmatter（先頭の --- ブロック）から theme: の値を取り出す。無ければ None。"""
+    m = re.match(r"^---\n(.*?)\n---\n", md_text, flags=re.DOTALL)
+    if not m:
+        return None
+    tm = _FRONTMATTER_THEME_RE.search(m.group(1))
+    return tm.group(1) if tm else None
+
+
+def _theme_css_candidates(theme_name: str) -> list:
+    """テーマ CSS の探索候補（.aide-templates 優先 → 正本）。"""
+    rel = Path("slide") / "themes" / theme_name / "theme.css"
+    # 本スクリプトは .aide/templates/export/scripts/ にあるため、親の親が export/
+    script_export_dir = Path(__file__).resolve().parent.parent
+    return [
+        Path.cwd() / ".aide-templates" / "export" / rel,       # 案件カスタム（優先）
+        script_export_dir / rel,                               # 正本（スクリプト相対）
+        Path.cwd() / ".aide" / "templates" / "export" / rel,   # 正本（cwd 相対・保険）
+    ]
+
+
+def resolve_theme_css(theme_name: str):
+    """テーマ名から theme.css のパスを解決する（先勝ち＝ .aide-templates 優先）。無ければ None。"""
+    name = _THEME_ALIASES.get(theme_name, theme_name)
+    for cand in _theme_css_candidates(name):
+        if cand.is_file():
+            return cand
+    return None
+
+
+def parse_root_palette(css_path: Path) -> dict:
+    """theme.css から --color-* の 6桁 hex を抽出する（:root のカラー変数のみ採用）。"""
+    text = css_path.read_text(encoding="utf-8")
+    palette = {}
+    for m in _ROOT_VAR_RE.finditer(text):
+        var, hex6 = m.group(1), m.group(2).lower()
+        if var in _THEME_VAR_TO_CONST:
+            palette[var] = hex6
+    return palette
+
+
+def apply_theme(theme_name: str) -> bool:
+    """テーマを解決してカラー定数を上書きする。成功時 True。
+    未解決・未定義の変数はモジュール冒頭の既定パレットのまま（後方互換）。"""
+    css = resolve_theme_css(theme_name)
+    if css is None:
+        print(f"[WARN] テーマ '{theme_name}' の theme.css が見つかりません。"
+              f"既定配色で生成します。", file=sys.stderr)
+        return False
+    palette = parse_root_palette(css)
+    g = globals()
+    for var, const in _THEME_VAR_TO_CONST.items():
+        if var in palette:
+            g[const] = palette[var]
+    print(f"[INFO] テーマ適用: {theme_name} ({css})")
+    return True
+
+
+# ============================================================
 # エントリポイント
 # ============================================================
 
@@ -1172,6 +1269,8 @@ def main():
                         help="出力 PPTX ファイルパス（省略時: 入力と同名の .pptx）")
     parser.add_argument("--pandoc", action="store_true",
                         help="pandoc 経路のコマンドを表示して終了")
+    parser.add_argument("--theme",
+                        help="使用するテーマ名（省略時: md frontmatter の theme: → 既定 corporate）")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -1187,6 +1286,11 @@ def main():
 
     print(f"[INFO] 変換中: {input_path} → {output_path}")
     md_text = input_path.read_text(encoding="utf-8")
+
+    # テーマ決定: CLI --theme > frontmatter の theme: > 既定 corporate
+    theme_name = args.theme or extract_frontmatter_theme(md_text) or DEFAULT_THEME
+    apply_theme(theme_name)
+
     slides  = parse_marp_md(md_text)
     print(f"[INFO] スライド数: {len(slides)}")
     build_pptx(slides, output_path)

@@ -15,7 +15,9 @@ document:
 
 # Marpスライド設定
 marp:
-  theme: "aide-corporate"  # .aide-export/marp-theme.css を参照
+  # 案件の既定テーマ名（MD frontmatter の theme: が無い場合のフォールバック）。
+  # 実体は slide/themes/<theme>/theme.css（.aide-templates/export/ 側があれば優先）。
+  theme: "corporate"
   paginate: true
 
 # Word出力設定（Phase 2以降）
