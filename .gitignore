@@ -9,3 +9,8 @@ docs/
 # Python キャッシュ
 __pycache__/
 *.pyc
+
+template-customization-test
+
+# Claude Code ローカル設定（個人環境用・コミットしない）
+.claude/settings.local.json
